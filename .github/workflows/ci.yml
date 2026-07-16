@@ -55,8 +55,14 @@ jobs:
 
       - run: npm ci
 
+      - name: Unit tests (pure services)
+        run: npm run test:unit
+
       - name: Run rules tests against the emulator
         run: npm run test:rules
+
+      - name: Publish-engine integration test
+        run: npm run test:integration
 
   build:
     name: Build

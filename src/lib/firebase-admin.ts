@@ -20,6 +20,16 @@ import { env } from "./env";
 function app(): App {
   if (getApps().length) return getApp();
 
+  // When pointed at the local emulators, the SDK talks to them regardless of
+  // credentials — so skip cert parsing entirely. This lets `npm run emulators`
+  // and the integration tests run without a real service-account key, and
+  // `cert()` never sees a fake PEM (which node:crypto would reject).
+  if (process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    return initializeApp({
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "signal-test",
+    });
+  }
+
   const { FIREBASE_ADMIN_CLIENT_EMAIL, FIREBASE_ADMIN_PRIVATE_KEY } = env();
 
   return initializeApp({

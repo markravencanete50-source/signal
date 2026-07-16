@@ -178,6 +178,25 @@ working deploy. Meta deprecates versions on roughly a 2-year cycle, so this
 needs a deliberate periodic bump — cheap and reviewable in one constant, versus
 debugging a publish that changed shape overnight.
 
+## 013 — AI orchestration lives in `lib/ai/`, not `services/`
+
+**Date:** 2026-07-16 · **Phase:** 2 · **Status:** accepted
+
+The spec lists `ai` (and `coherence`) under `services/`, which it also defines as
+"pure functions, no UI/HTTP". Those two can't both hold: every AI feature calls
+the Claude API, which is HTTP. Same tension as DECISIONS #010 resolved for
+Firestore.
+
+Chosen: **AI orchestration lives in `lib/ai/`** (infrastructure, beside
+`lib/claude.ts`, `lib/cloudinary.ts`, `lib/resend.ts`). `services/` stays pure —
+`besttime`, `coherence` scoring math, `anomaly`, intent scoring — so those engines
+remain unit-testable with no network. A pure service may be _fed_ an AI result
+computed in `lib/ai/`, but never calls Claude itself.
+
+The build rule "every AI output that recommends something ships its reasoning" is
+enforced at the `lib/ai/` boundary: each function returns a typed object with a
+`reasoning` field, and the zod schema makes it non-optional.
+
 ## 012 — `invites` collection added to the data model
 
 **Date:** 2026-07-16 · **Phase:** 1 · **Status:** accepted

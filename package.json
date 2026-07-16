@@ -11,7 +11,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "emulators": "firebase emulators:start --only auth,firestore",
-    "test:rules": "firebase emulators:exec --only firestore --project signal-test \"vitest run --dir tests/rules\""
+    "test:unit": "vitest run tests/unit",
+    "test:rules": "firebase emulators:exec --only firestore --project signal-test \"vitest run --dir tests/rules\"",
+    "test:integration": "firebase emulators:exec --only firestore --project signal-integration \"vitest run tests/integration\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

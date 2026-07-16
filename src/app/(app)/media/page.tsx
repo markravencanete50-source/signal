@@ -1,18 +1,35 @@
-import { PhasePlaceholder } from "@/components/ui/phase-placeholder";
+import { listAssets } from "@/lib/db/media";
 import { requireTeamView } from "@/lib/auth/view-guard";
+import { getAppContext } from "@/lib/workspace-context";
+
+import { MediaLibrary } from "./media-library";
 
 export const metadata = { title: "Media library — Signal" };
 
-// Team-only view: clients are redirected here by nowhere, but a typed URL must
-// still 403 rather than render. requireTeamView throws ForbiddenError.
+/**
+ * Media library. Replicates the preview's `.media-grid` — signed Cloudinary
+ * uploads, tag filters, usage badges and the native-format guard.
+ */
 export default async function MediaPage() {
   await requireTeamView();
-  return (
-    <PhasePlaceholder
-      title="Media library"
-      subtitle="Cloudinary-backed assets with per-platform transforms"
-      phase="Phase 2"
-      description="The media library — signed uploads, tags, usage tracking and the native-format guard — is built in Phase 2."
-    />
-  );
+  const { workspace } = await getAppContext();
+  const assets = await listAssets(workspace.id);
+
+  // Serialise to plain objects for the client component (Firestore Timestamps
+  // and class instances don't cross the server/client boundary).
+  const plain = assets.map((a) => ({
+    id: a.id,
+    type: a.type,
+    secureUrl: a.secureUrl,
+    tags: a.tags,
+    durationSec: a.durationSec,
+    usageCount: a.usage.length,
+    lastUsedAt: a.usage.at(-1)?.usedAt,
+    watermarkStripped: Boolean(a.guard?.reformatted),
+    createdAt: a.createdAt,
+  }));
+
+  const totalBytes = assets.reduce((sum, a) => sum + a.bytes, 0);
+
+  return <MediaLibrary assets={plain} totalBytes={totalBytes} />;
 }

@@ -4,6 +4,50 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 2 — Composer, Planner, Publishing, Media
+
+**Added**
+
+- **Publish engine** (`/api/cron/publish`, every minute): claims due posts with a
+  per-post Firestore transaction lock (`scheduled → publishing`), publishes each
+  enabled variant via the adapter, records permalink + external id. Retry backoff
+  5m/15m then `failed`, with an in-app notification and a Resend failure email to
+  brand admins. Idempotent — proven by an integration test that publishes a post
+  end-to-end against the mock adapter and confirms the lock blocks a re-claim.
+- **Composer** (`/planner/compose`): platform toggles, shared/FB/IG caption
+  variants, live per-platform char limits, media picker, AI hashtag chips
+  (`/api/ai/caption`), predicted intent-score ring (`/api/ai/score`), and four
+  submit actions (draft / request approval / schedule / publish now). Media is
+  re-validated server-side against each platform's specs.
+- **Planner**: month calendar of real posts, status-coloured chips, platform
+  filter, month navigation, and HTML5 drag-to-reschedule (authorised + refuses to
+  move published posts).
+- **Media library**: signed Cloudinary uploads (image + video) straight from the
+  browser, tag filters, usage badges, and the **native-format guard** — video
+  frames are checked for TikTok/CapCut watermarks (Claude vision) and a cropped
+  re-export is recorded so publishing uses the clean version.
+- **AI** (`lib/ai/`): caption + score, each returning reasoning (never a bare
+  number); `lib/claude.ts` as the single Anthropic choke point; graceful 503
+  degradation when `ANTHROPIC_API_KEY` is unset.
+- Pure services (`besttime`, `publish-policy`) with unit tests needing no
+  emulator; posts/media/notifications repositories; `lib/cloudinary.ts` (signed
+  uploads + per-platform transforms); cron-secret auth; intent ring UI.
+
+**Fixed**
+
+- `claimDuePosts` returned the pre-increment `attempts`, so the publish engine
+  would have computed retry timing against a stale count. Caught by the
+  integration test.
+- `firebase-admin` now initialises without a service-account key when
+  `FIRESTORE_EMULATOR_HOST` is set, so emulator dev and the integration tests run
+  without real credentials.
+
+**Changed**
+
+- AI orchestration lives in `lib/ai/` rather than `services/` (DECISIONS #013),
+  keeping services pure. Added `posts(brandId, scheduledAt)` index for the
+  Planner range query.
+
 ### Phase 1 — Auth, tenancy, shell
 
 **Added**
