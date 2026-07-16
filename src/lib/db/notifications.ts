@@ -46,3 +46,41 @@ export async function listNotifications(userId: string): Promise<Notification[]>
     .get();
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Notification);
 }
+
+/**
+ * Mark one notification read — but only if it belongs to `userId`. The ownership
+ * check matters: the id comes from the client, and the Admin SDK bypasses the
+ * rule that would otherwise scope this.
+ */
+export async function markNotificationRead(id: string, userId: string): Promise<void> {
+  const ref = adminDb().doc(`${COLLECTION}/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.userId !== userId) return;
+  if (snap.data()?.readAt) return; // already read
+  await ref.update({ readAt: new Date().toISOString() });
+}
+
+/**
+ * Mark all of a user's unread notifications read, in one batch.
+ *
+ * Unread = `readAt` absent. We can't query that directly (Firestore's `== null`
+ * matches explicit nulls, not missing fields, and `createNotification` never
+ * writes the field), so we scan the user's recent notifications and update the
+ * ones without a `readAt`.
+ */
+export async function markAllNotificationsRead(userId: string): Promise<void> {
+  const snap = await adminDb()
+    .collection(COLLECTION)
+    .where("userId", "==", userId)
+    .orderBy("createdAt", "desc")
+    .limit(50)
+    .get();
+
+  const unread = snap.docs.filter((d) => !d.data().readAt);
+  if (unread.length === 0) return;
+
+  const now = new Date().toISOString();
+  const batch = adminDb().batch();
+  unread.forEach((d) => batch.update(d.ref, { readAt: now }));
+  await batch.commit();
+}

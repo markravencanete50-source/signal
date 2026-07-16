@@ -2,7 +2,8 @@ import "server-only";
 
 import type Stripe from "stripe";
 
-import { getWorkspaceByStripeCustomer, setWorkspaceBilling } from "./db/workspaces";
+import { recordAudit } from "./db/audit";
+import { getWorkspace, getWorkspaceByStripeCustomer, setWorkspaceBilling } from "./db/workspaces";
 import { env } from "./env";
 import { stripe } from "./stripe";
 import { resolvePlanState } from "@/services/plans";
@@ -77,6 +78,9 @@ export async function applySubscriptionState(sub: Stripe.Subscription): Promise<
 
   const { plan, subscriptionStatus } = resolvePlanState(sub.status as SubscriptionStatus);
 
+  // Audit only a real plan transition, not every subscription.updated ping.
+  const previous = (await getWorkspace(workspaceId))?.plan;
+
   await setWorkspaceBilling(workspaceId, {
     plan,
     subscriptionStatus,
@@ -84,6 +88,17 @@ export async function applySubscriptionState(sub: Stripe.Subscription): Promise<
     stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer.id,
     currentPeriodEnd: periodEndIso(sub),
   });
+
+  if (previous && previous !== plan) {
+    await recordAudit({
+      workspaceId,
+      actorId: "stripe",
+      actorName: "Stripe",
+      action: "plan.changed",
+      target: `${previous} → ${plan}`,
+      metadata: { subscriptionStatus },
+    }).catch(() => {});
+  }
 }
 
 async function resolveWorkspaceId(sub: Stripe.Subscription): Promise<string | null> {

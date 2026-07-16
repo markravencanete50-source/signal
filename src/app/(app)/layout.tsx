@@ -5,6 +5,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { countPendingApprovals } from "@/lib/db/approvals";
 import { listConnectionsForWorkspace } from "@/lib/db/connections";
 import { countOpenInbox } from "@/lib/db/inbox";
+import { listNotifications } from "@/lib/db/notifications";
 import { getAppContext } from "@/lib/workspace-context";
 
 /**
@@ -20,11 +21,12 @@ import { getAppContext } from "@/lib/workspace-context";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, workspace, role, brands, activeBrand } = await getAppContext();
 
-  const [connections, approvals, inbox] = await Promise.all([
+  const [connections, approvals, inbox, notifications] = await Promise.all([
     listConnectionsForWorkspace(workspace.id),
     countPendingApprovals(workspace.id),
     // Inbox items are per-brand; badge the active brand's open count.
     activeBrand ? countOpenInbox(activeBrand.id) : Promise.resolve(0),
+    listNotifications(user.uid),
   ]);
   const lastSyncAt = mostRecentSync(connections.map((c) => c.lastSyncAt));
 
@@ -43,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           user={user}
           role={role}
           lastSyncAt={lastSyncAt}
-          hasUnreadNotifications={false}
+          notifications={notifications}
         />
 
         {/* .content — max-width 1180px, bottom padding clears the mobile nav */}

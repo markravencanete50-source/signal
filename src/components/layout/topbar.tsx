@@ -1,8 +1,9 @@
-import { BellIcon, SearchIcon } from "@/components/ui/icons";
+import { SearchIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import type { Brand, Role, User } from "@/types";
+import type { Brand, Notification, Role, User } from "@/types";
 
 import { BrandSwitcher } from "./brand-switcher";
+import { NotificationsBell } from "./notifications-bell";
 import { UserMenu } from "./user-menu";
 
 /**
@@ -20,7 +21,7 @@ export interface TopbarProps {
   user: User;
   role: Role;
   lastSyncAt: string | null;
-  hasUnreadNotifications: boolean;
+  notifications: Notification[];
 }
 
 export function Topbar({
@@ -29,7 +30,7 @@ export function Topbar({
   user,
   role,
   lastSyncAt,
-  hasUnreadNotifications,
+  notifications,
 }: TopbarProps) {
   return (
     <header className="border-border bg-surface sticky top-0 z-40 flex h-[60px] items-center gap-3 border-b px-4 md:px-6">
@@ -53,19 +54,7 @@ export function Topbar({
 
       <SyncStatus lastSyncAt={lastSyncAt} />
 
-      <button
-        type="button"
-        aria-label="Notifications"
-        className="text-text-2 hover:bg-surface-2 hover:text-text-1 relative grid size-[36px] place-items-center rounded-[10px] transition-colors"
-      >
-        <BellIcon className="size-[18px]" />
-        {hasUnreadNotifications && (
-          <span
-            className="border-surface bg-danger absolute top-1.5 right-1.5 size-2 rounded-full border-2"
-            aria-hidden="true"
-          />
-        )}
-      </button>
+      <NotificationsBell notifications={notifications} />
 
       <ThemeToggle />
       <UserMenu user={user} role={role} />

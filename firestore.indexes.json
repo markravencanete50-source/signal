@@ -182,6 +182,14 @@
         { "fieldPath": "digest.enabled", "order": "ASCENDING" },
         { "fieldPath": "digest.weekday", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workspaceId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

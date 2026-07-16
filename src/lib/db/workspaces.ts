@@ -105,6 +105,13 @@ export async function setWorkspaceBilling(
   await adminDb().doc(`workspaces/${workspaceId}`).update(clean);
 }
 
+/** A user's display label (name → email → uid), for audit targets and the like. */
+export async function getUserLabel(uid: string): Promise<string> {
+  const snap = await adminDb().doc(`users/${uid}`).get();
+  const data = snap.exists ? (snap.data() as User) : null;
+  return data?.name || data?.email || uid;
+}
+
 export async function getMember(workspaceId: string, uid: string): Promise<Member | null> {
   const snap = await adminDb().doc(`workspaces/${workspaceId}/members/${uid}`).get();
   if (!snap.exists) return null;

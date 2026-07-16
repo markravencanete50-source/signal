@@ -387,3 +387,29 @@ window before access is pulled. Plan limits (Free = 1 brand / 3 seats) and the P
 price are **placeholders** in `services/plans.ts` — deliberately in one pure file
 so tuning them (and the matching Stripe Price) is trivial; enforced at the two
 real chokepoints (brand-create, invite), not just hidden in the UI.
+
+## 023 — Notifications unread = missing `readAt`, computed in memory
+
+**Date:** 2026-07-17 · **Phase:** 9 · **Status:** accepted
+
+`createNotification` never writes a `readAt` field (it's set only when the item
+is read). Firestore's `where('readAt','==',null)` matches docs with an EXPLICIT
+null, not missing fields, so it would silently return zero unread. Rather than
+backfill nulls (and risk the same trap on any future writer), unread is derived
+in memory from the already-fetched list (`!n.readAt`) — the topbar loads ≤50
+notifications for the panel anyway, so the count is free and always correct.
+`markAllNotificationsRead` scans that same bounded list instead of a null query.
+
+## 024 — Audit log: append-only, admin-read, recorded best-effort at call sites
+
+**Date:** 2026-07-17 · **Phase:** 9 · **Status:** accepted
+
+`auditLogs` records security- and billing-relevant changes only (connections,
+membership, brands, plan) — not routine content edits, which would drown the
+signal. It's append-only and server-written (rules: `canAdmin` read, `write:
+false`); the Admin SDK is the sole writer. `recordAudit` is called at each
+mutation wrapped in `.catch(() => {})` so an audit-write failure can never break
+the action it records — an audit trail is a safety net, not a critical path.
+Actors are the Signal user for manual actions, or a system label ("Stripe",
+"Meta") for automated ones (webhook, deauthorize callback); `plan.changed` logs
+only on a real tier transition, not on every `subscription.updated` delivery.

@@ -3,11 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { requireAdmin, requireBrandAccess } from "@/lib/auth/dal";
-import { createBrand, deleteBrand, listBrands, updateBrand } from "@/lib/db/brands";
+import { getCurrentUser, requireAdmin, requireBrandAccess } from "@/lib/auth/dal";
+import { recordAudit } from "@/lib/db/audit";
+import { createBrand, deleteBrand, getBrand, listBrands, updateBrand } from "@/lib/db/brands";
 import { getWorkspace } from "@/lib/db/workspaces";
 import { canAddBrand, planFor } from "@/services/plans";
 import { ADMIN_ROLES } from "@/types";
+
+/** The current user as an audit actor: prefer their name, fall back to email. */
+async function actor(): Promise<{ actorId: string; actorName: string }> {
+  const user = await getCurrentUser();
+  return { actorId: user?.uid ?? "unknown", actorName: user?.name ?? user?.email ?? "A teammate" };
+}
 
 export type BrandState = { error?: string; success?: string };
 
@@ -49,6 +56,12 @@ export async function addBrand(_prev: BrandState, formData: FormData): Promise<B
     }
 
     await createBrand(parsed.data);
+    await recordAudit({
+      workspaceId: parsed.data.workspaceId,
+      ...(await actor()),
+      action: "brand.created",
+      target: parsed.data.name,
+    }).catch(() => {});
     revalidatePath("/settings/brands");
     return { success: `${parsed.data.name} added.` };
   } catch (err) {
@@ -97,10 +110,17 @@ export async function removeBrand(formData: FormData): Promise<{ error?: string 
   }
 
   const { workspaceId } = await requireBrandAccess(brandId, ADMIN_ROLES);
+  const brand = await getBrand(brandId);
   await deleteBrand(brandId);
+
+  await recordAudit({
+    workspaceId,
+    ...(await actor()),
+    action: "brand.deleted",
+    target: brand?.name ?? brandId,
+  }).catch(() => {});
 
   revalidatePath("/settings/brands");
   revalidatePath("/", "layout");
-  void workspaceId;
   return {};
 }

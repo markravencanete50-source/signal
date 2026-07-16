@@ -1,3 +1,5 @@
+import { getAppContext } from "@/lib/workspace-context";
+
 import { SettingsTabs } from "./settings-tabs";
 
 /**
@@ -5,10 +7,13 @@ import { SettingsTabs } from "./settings-tabs";
  * they're split into routes here so each can load its own data independently
  * and deep-link (the OAuth callback redirects straight to /settings/connections).
  */
-export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const { role } = await getAppContext();
+  const isAdmin = role === "owner" || role === "admin";
+
   return (
     <>
-      <SettingsTabs />
+      <SettingsTabs isAdmin={isAdmin} />
       {children}
     </>
   );

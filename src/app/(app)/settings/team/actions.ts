@@ -5,11 +5,24 @@ import { z } from "zod";
 
 import { InviteEmail } from "@/emails/invite";
 import { getCurrentUser, requireAdmin } from "@/lib/auth/dal";
+import { recordAudit } from "@/lib/db/audit";
 import { createInvite, listPendingInvites, revokeInvite } from "@/lib/db/invites";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/resend";
-import { getWorkspace, listTeamMembers, removeMember, updateMemberRole } from "@/lib/db/workspaces";
+import {
+  getUserLabel,
+  getWorkspace,
+  listTeamMembers,
+  removeMember,
+  updateMemberRole,
+} from "@/lib/db/workspaces";
 import { canAddSeat, planFor } from "@/services/plans";
+
+/** The current user as an audit actor. */
+async function actor(): Promise<{ actorId: string; actorName: string }> {
+  const user = await getCurrentUser();
+  return { actorId: user?.uid ?? "unknown", actorName: user?.name ?? user?.email ?? "A teammate" };
+}
 import { revokeAllSessions } from "@/lib/auth/session";
 import { adminAuth } from "@/lib/firebase-admin";
 
@@ -80,6 +93,14 @@ export async function inviteMember(_prev: TeamState, formData: FormData): Promis
       }),
     });
 
+    await recordAudit({
+      workspaceId,
+      ...(await actor()),
+      action: "member.invited",
+      target: email,
+      metadata: { role },
+    }).catch(() => {});
+
     revalidatePath("/settings/team");
     return { success: `Invitation sent to ${email}.` };
   } catch (err) {
@@ -109,6 +130,13 @@ export async function changeRole(formData: FormData): Promise<void> {
   if (workspace?.ownerId === uid) throw new Error("The workspace owner's role can't be changed.");
 
   await updateMemberRole(workspaceId, uid, parsed.data);
+  await recordAudit({
+    workspaceId,
+    ...(await actor()),
+    action: "member.role_changed",
+    target: await getUserLabel(uid),
+    metadata: { role: parsed.data },
+  }).catch(() => {});
   revalidatePath("/settings/team");
 }
 
@@ -130,7 +158,14 @@ export async function removeTeamMember(formData: FormData): Promise<void> {
   const workspace = await getWorkspace(workspaceId);
   if (workspace?.ownerId === uid) throw new Error("The workspace owner can't be removed.");
 
+  const label = await getUserLabel(uid);
   await removeMember(workspaceId, uid);
+  await recordAudit({
+    workspaceId,
+    ...(await actor()),
+    action: "member.removed",
+    target: label,
+  }).catch(() => {});
 
   try {
     await revokeAllSessions(uid);

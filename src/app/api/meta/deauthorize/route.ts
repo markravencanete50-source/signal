@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { recordAudit } from "@/lib/db/audit";
 import { listConnectionsByMetaUser, markConnectionExpired } from "@/lib/db/connections";
 import { env } from "@/lib/env";
 import { parseSignedRequest } from "@/lib/meta/signed-request";
@@ -24,11 +25,20 @@ export async function POST(request: Request) {
 
   const connections = await listConnectionsByMetaUser(payload.user_id);
   await Promise.all(
-    connections.map((c) =>
-      markConnectionExpired(c.id, "The Meta account was disconnected — please reconnect.").catch(
-        () => {},
-      ),
-    ),
+    connections.map(async (c) => {
+      await markConnectionExpired(
+        c.id,
+        "The Meta account was disconnected — please reconnect.",
+      ).catch(() => {});
+      await recordAudit({
+        workspaceId: c.workspaceId,
+        actorId: "meta",
+        actorName: "Meta",
+        action: "connection.revoked",
+        target: c.accountName,
+        metadata: { platform: c.platform, via: "deauthorize callback" },
+      }).catch(() => {});
+    }),
   );
 
   return NextResponse.json({ ok: true, revoked: connections.length });

@@ -4,6 +4,7 @@ import { getAdapter } from "@/adapters/registry";
 import { requireBrandAccess } from "@/lib/auth/dal";
 import { consumeOAuthState } from "@/lib/auth/oauth-state";
 import { getCurrentUser } from "@/lib/auth/dal";
+import { recordAudit } from "@/lib/db/audit";
 import { upsertConnection } from "@/lib/db/connections";
 import { ADMIN_ROLES } from "@/types";
 
@@ -69,6 +70,15 @@ export async function GET(request: NextRequest) {
       tokens,
       connectedByName: user?.name,
     });
+
+    await recordAudit({
+      workspaceId,
+      actorId: user?.uid ?? "unknown",
+      actorName: user?.name ?? user?.email ?? "A teammate",
+      action: "connection.connected",
+      target: tokens.accountName,
+      metadata: { platform: state.platform },
+    }).catch(() => {});
 
     return settingsUrl(`${tokens.accountName} connected.`, true);
   } catch (err) {

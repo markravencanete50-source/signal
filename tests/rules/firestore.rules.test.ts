@@ -449,6 +449,18 @@ describe("server-owned collections", () => {
     await assertFails(asOwnerA().doc("auditLogs/log_1").delete());
   });
 
+  it("lets an admin read the workspace's auditLogs", async () => {
+    await assertSucceeds(asOwnerA().doc("auditLogs/log_1").get());
+  });
+
+  it("denies a non-admin (editor) reading auditLogs", async () => {
+    await assertFails(asEditorA().doc("auditLogs/log_1").get());
+  });
+
+  it("denies cross-workspace auditLog reads", async () => {
+    await assertFails(asOwnerB().doc("auditLogs/log_1").get());
+  });
+
   it("denies client-side workspace creation", async () => {
     // Must be server-side: workspace + owner member doc have to land atomically.
     await assertFails(

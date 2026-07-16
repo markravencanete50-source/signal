@@ -4,6 +4,24 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 9 — Notifications & audit UI
+
+**Added**
+
+- **Notifications bell**: the topbar bell is now a real dropdown (server-rendered
+  list, bounded at 50) with an unread dot, per-item link navigation, and
+  mark-read / mark-all-read via session-scoped server actions. Unread is derived
+  in-memory (`readAt` absent) — deliberately not a `where readAt == null` query,
+  since Firestore's `== null` misses docs where the field was never written.
+  Repo gains `markNotificationRead` (ownership-checked) and `markAllNotificationsRead`.
+- **Audit log**: append-only `auditLogs` writer (`lib/db/audit.ts`, server-only)
+  wired into the security/billing-relevant mutations — brand create/delete, member
+  invite / role-change / remove, connection connect (OAuth) and revoke (Meta
+  deauthorize), and plan changes (Stripe webhook, logged only on a real
+  transition). Admin-only viewer at **Settings → Audit log** (the tab is hidden
+  from non-admins and the page re-checks `requireRole(ADMIN_ROLES)`), listing
+  actor / action / target / time. Composite index + rules read-coverage added.
+
 ### Phase 8 — Stripe billing
 
 **Added**

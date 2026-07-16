@@ -270,6 +270,25 @@ export interface Notification {
   readAt?: string;
 }
 
+/**
+ * An audit-log entry — an admin-visible record of a security- or billing-relevant
+ * change. Append-only and server-written (rules deny all client writes). `actor`
+ * is a Signal user for manual actions, or a system label ("Stripe", "Meta") for
+ * automated ones.
+ */
+export interface AuditLog {
+  id: string;
+  workspaceId: string;
+  actorId: string;
+  actorName: string;
+  /** Dotted verb, e.g. "brand.created", "member.role_changed", "plan.changed". */
+  action: string;
+  /** Human-readable description of what was acted on. */
+  target: string;
+  createdAt: string;
+  metadata?: Record<string, string>;
+}
+
 /** A member row joined with its user profile, for the Settings → Team list. */
 export interface TeamMember {
   uid: string;

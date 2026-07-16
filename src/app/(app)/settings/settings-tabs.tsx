@@ -11,14 +11,16 @@ const TABS = [
   { href: "/settings/team", label: "Team" },
   { href: "/settings/brands", label: "Brands" },
   { href: "/settings/billing", label: "Billing" },
+  { href: "/settings/audit", label: "Audit log", adminOnly: true },
 ];
 
-export function SettingsTabs() {
+export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
+  const tabs = TABS.filter((t) => !t.adminOnly || isAdmin);
 
   return (
     <div className="mb-[18px] flex flex-wrap gap-2">
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = pathname.startsWith(tab.href);
         return (
           <Link
