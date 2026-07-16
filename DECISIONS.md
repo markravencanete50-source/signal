@@ -256,3 +256,44 @@ one Claude coherence call per brand per day regardless of how many times the
 views render. Rules: member-read, server-write-only (same shape as the other
 derived-analytics collections). A stale doc simply isn't read the next day; no
 eviction needed.
+
+## 016 — Reports store a point-in-time snapshot; digest cron runs daily
+
+**Date:** 2026-07-16 · **Phase:** 5 · **Status:** accepted
+
+A report is a captured moment, not a live query. On create/refresh it computes
+per-brand aggregates from already-synced Firestore data and stores them on the
+report doc (`snapshot`), plus a Claude-generated `narrative`. The public
+`/r/{token}` page renders from that document alone — no Graph API call on view
+(DECISIONS #005) and no public Firestore read (resolved by token via the Admin
+SDK, DECISIONS #006). `refreshReport` overwrites the snapshot in place and is
+idempotent, so a view, a manual refresh, and the cron all share one path.
+
+The digest supports any weekday, so its cron was moved from Monday-only
+(`0 8 * * 1`) to **daily at 08:00 UTC** (`0 8 * * *`); each report fires on its
+own configured weekday, and `digest.lastSentAt` guards against a same-day
+double-send. PDF export is the browser's own print-to-PDF over print CSS
+(`print:hidden` chrome, `break-inside-avoid` sections) rather than a second
+server render path.
+
+## 017 — SmartLink public pages live at `/s/{slug}`, not root `/{slug}`
+
+**Date:** 2026-07-17 · **Phase:** 5 · **Status:** accepted
+
+The preview shows a link-in-bio at `signal.link/{slug}` (root). Serving it at the
+literal root would either (a) require `proxy.ts` to redirect signed-out visitors
+to /login — breaking a public page — or (b) exclude all root single-segment paths
+from the proxy, which is fragile and mixes public and authed routes at the same
+level.
+
+Chosen: a dedicated public prefix `/s/{slug}`, excluded from the proxy matcher
+alongside the other no-auth surfaces (`/r/`, `/approve/`). Same pattern, same
+guarantees: resolved server-side by slug via the Admin SDK, collection
+client-deny-all. Click-throughs go via `/api/click` (under the already-excluded
+`/api/*`), which is the ONLY writer of click counters — a client-writable counter
+could be inflated at will, so both `smartlinks` and `smartlinkClicks` deny all
+client access. The redirect target is read from the stored link, never from a
+query param, so the endpoint can't be coerced into an open redirect. Post
+attribution rides a `?ref={postId}` param that `recordClick` validates against the
+SmartLink's own workspace before crediting, so a forged ref can't write into
+another tenant's attribution.

@@ -4,6 +4,38 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 5 — Approvals, Reports, SmartLink
+
+**Added**
+
+- **Approvals**: one-click client sign-off with no login. The composer's "Request
+  approval" mints a single-use 32-byte token and emails the workspace's client(s)
+  (`emails/approval-request.tsx`); the public `/approve/[token]` page confirms the
+  decision (two-step, so email-scanner prefetches can't auto-approve). Decisions
+  move the post (approve → scheduled/draft, changes → draft), clear the token, and
+  notify the workspace. Team-side Approvals view with "Send reminder" and "Mark
+  approved on behalf" (`lib/db/approvals.ts`); live sidebar count.
+- **Reports**: builder (period + brands) that snapshots STORED metrics
+  (`lib/reports/snapshot.ts`) and has Claude narrate them
+  (`lib/ai/narrative.ts`) — grounded, and every recommendation ships its reason.
+  White-label public `/r/[token]` page rendered from the stored snapshot (no auth,
+  no live Graph call), with "Save as PDF" via print CSS. Reports carry a
+  post-attributed SmartLink section (populated once Task #22 lands).
+- **Weekly digest**: per-report schedule (weekday + recipient) and a daily
+  `/api/cron/digest` that re-snapshots, regenerates the narrative, and emails it
+  (`emails/digest.tsx`). Idempotent — a report already sent today is skipped.
+- Firestore `reports` collection is client-deny-all (public token, Admin-SDK
+  only); composite indexes for the reports list, digest-due query, and the
+  recently-decided approvals query.
+- **SmartLink**: per-brand link-in-bio (`lib/db/smartlinks.ts`). Team editor with
+  live phone preview, drag-to-reorder links, featured (accent) button, and per-link
+  click counts. Public `/s/{slug}` page (no auth, Admin-SDK by slug). Click
+  redirect `/api/click` increments counters server-side and 302s to the STORED
+  destination (never a query param — no open redirect). A `?ref={postId}` on a
+  visit attributes the click to that post (validated against the SmartLink's
+  workspace), and those aggregates feed the report's "SmartLink clicks by post"
+  section. `smartlinks` + `smartlinkClicks` are client-deny-all.
+
 ### Phase 4 — Studio, Ask Signal, Best Time
 
 **Added**

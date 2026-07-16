@@ -2,6 +2,7 @@ import { AskSignal } from "@/components/layout/ask-signal";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { countPendingApprovals } from "@/lib/db/approvals";
 import { listConnectionsForWorkspace } from "@/lib/db/connections";
 import { getAppContext } from "@/lib/workspace-context";
 
@@ -18,13 +19,15 @@ import { getAppContext } from "@/lib/workspace-context";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, workspace, role, brands, activeBrand } = await getAppContext();
 
-  const connections = await listConnectionsForWorkspace(workspace.id);
+  const [connections, approvals] = await Promise.all([
+    listConnectionsForWorkspace(workspace.id),
+    countPendingApprovals(workspace.id),
+  ]);
   const lastSyncAt = mostRecentSync(connections.map((c) => c.lastSyncAt));
 
-  // Live counts land in Phase 6 (Inbox) and Phase 5 (Approvals). Zeroes render
-  // no badge at all, so the nav is honest until the data is real rather than
-  // showing the preview's hardcoded 4 and 2.
-  const counts = { inbox: 0, approvals: 0 };
+  // Approvals is live (Phase 5); Inbox lands in Phase 6. A zero renders no badge,
+  // so the nav stays honest rather than showing the preview's hardcoded counts.
+  const counts = { inbox: 0, approvals };
 
   return (
     <div className="grid min-h-screen md:grid-cols-[236px_1fr]">

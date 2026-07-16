@@ -255,3 +255,133 @@ export interface TeamMember {
   email: string;
   avatarUrl?: string;
 }
+
+// ---------------------------------------------------------------------------
+// reports
+// ---------------------------------------------------------------------------
+
+export type ReportPeriod = "last-7-days" | "last-30-days" | "this-month" | "last-month";
+
+/** A single brand's aggregated numbers for the report window. */
+export interface ReportBrandSnapshot {
+  brandId: string;
+  brandName: string;
+  followers: number | null;
+  reach: number | null;
+  reachDeltaPct: number | null;
+  avgIntent: number | null;
+  topPosts: Array<{
+    title: string;
+    format: string;
+    platform: string;
+    intentScore: number;
+    reach: number;
+    saves?: number;
+    shares: number;
+  }>;
+  /**
+   * Clicks driven by this brand's posts through its SmartLink, attributed back to
+   * the post via the `ref` param. Empty until SmartLink attribution lands.
+   */
+  smartlinkClicks: Array<{ postTitle: string; clicks: number }>;
+}
+
+/**
+ * A recommendation ALWAYS carries its reasoning — a bare "post more Reels" is
+ * banned by the architecture rules. `text` is the action; `reason` is the
+ * evidence from the snapshot that justifies it.
+ */
+export interface ReportRecommendation {
+  text: string;
+  reason: string;
+}
+
+/** The AI narrative, generated fresh from the snapshot and stored with it. */
+export interface ReportNarrative {
+  summary: string;
+  recommendations: ReportRecommendation[];
+}
+
+/** A weekly emailed digest of a report, sent to a client without a login. */
+export interface ReportDigest {
+  enabled: boolean;
+  /** 0 = Sunday … 6 = Saturday. Matched against the cron's run day. */
+  weekday: number;
+  recipientEmail: string;
+  lastSentAt?: string;
+}
+
+// ---------------------------------------------------------------------------
+// smartlink
+// ---------------------------------------------------------------------------
+
+/** One link row on a SmartLink page. `clicks` is a running aggregate. */
+export interface SmartLinkItem {
+  id: string;
+  label: string;
+  url: string;
+  /** Highlighted (accent) call-to-action button. */
+  hot: boolean;
+  clicks: number;
+}
+
+/**
+ * A brand's link-in-bio page, one per brand, addressed by `slug` at `/s/{slug}`.
+ * Public and unauthenticated — resolved server-side by slug via the Admin SDK.
+ */
+export interface SmartLink {
+  id: string;
+  workspaceId: string;
+  brandId: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  /** Two-letter avatar initials shown on the public page. */
+  avatarText: string;
+  /** Accent hex for the hot button — the one place a SmartLink stores a colour. */
+  accent: string;
+  links: SmartLinkItem[];
+  totalClicks: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Per-post click attribution aggregate, one doc per post that has driven any
+ * SmartLink click (via the `?ref={postId}` param). An aggregate, not raw events
+ * (architecture rule #5) — reports read these to show which content produced
+ * clicks, not just reach.
+ */
+export interface SmartLinkAttribution {
+  postId: string;
+  brandId: string;
+  workspaceId: string;
+  postTitle: string;
+  clicks: number;
+  lastClickAt: string;
+}
+
+/**
+ * A white-label report. Aggregates are computed and STORED at generation time
+ * (never re-fetched from the Graph API on view — DECISIONS #005), so the public
+ * page renders from this document alone.
+ */
+export interface Report {
+  id: string;
+  workspaceId: string;
+  title: string;
+  period: ReportPeriod;
+  /** Resolved window the snapshot covers, for display and re-generation. */
+  from: string;
+  to: string;
+  brandIds: string[];
+  snapshot: ReportBrandSnapshot[];
+  narrative: ReportNarrative | null;
+  /** Public bearer token for `/r/{token}`. */
+  publicToken: string;
+  createdBy: string;
+  createdAt: string;
+  refreshedAt: string;
+  viewCount: number;
+  digest?: ReportDigest;
+}

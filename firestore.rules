@@ -85,6 +85,36 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // reports — TOTAL CLIENT LOCKOUT
+    //
+    // A report carries a public bearer token (`publicToken`) that renders the
+    // white-label `/r/{token}` page with no login. A client-readable collection
+    // would let any member enumerate those tokens, so every access — the in-app
+    // list AND the public page — goes through the Admin SDK, which resolves a
+    // report by id or token and never hands the collection out (DECISIONS #006).
+    // ---------------------------------------------------------------------
+    match /reports/{reportId} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // smartlinks + click attribution — TOTAL CLIENT LOCKOUT
+    //
+    // The public `/s/{slug}` page and the click redirect both run server-side
+    // via the Admin SDK, and click counters must only ever move through that
+    // trusted path — a client-writable counter could be inflated at will. So
+    // both collections are deny-all; the editor reads/writes go through the
+    // Admin SDK after a workspace authorisation check.
+    // ---------------------------------------------------------------------
+    match /smartlinks/{smartlinkId} {
+      allow read, write: if false;
+    }
+
+    match /smartlinkClicks/{postId} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------------
     // users — a user reads and edits only their own profile doc
     // ---------------------------------------------------------------------
     match /users/{uid} {

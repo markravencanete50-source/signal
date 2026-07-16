@@ -77,6 +77,26 @@ beforeEach(async () => {
       token: "secret-bearer-token",
     });
 
+    await db.doc(`reports/report_a`).set({
+      workspaceId: WS_A,
+      title: "June 2026",
+      publicToken: "secret-report-token",
+    });
+
+    await db.doc(`smartlinks/sl_a`).set({
+      workspaceId: WS_A,
+      brandId: "brand_a",
+      slug: "house-of-lettings",
+      totalClicks: 42,
+    });
+
+    await db.doc(`smartlinkClicks/post_pending`).set({
+      workspaceId: WS_A,
+      brandId: "brand_a",
+      postId: "post_pending",
+      clicks: 7,
+    });
+
     await db.doc(`posts/post_pending`).set({
       workspaceId: WS_A,
       brandId: "brand_a",
@@ -138,6 +158,37 @@ describe("invites — bearer tokens", () => {
     await assertFails(
       asOwnerA().doc("invites/forged").set({ workspaceId: WS_A, role: "owner", token: "mine" }),
     );
+  });
+});
+
+describe("reports — public bearer tokens", () => {
+  it("denies an owner reading a report (public token would leak)", async () => {
+    await assertFails(asOwnerA().doc("reports/report_a").get());
+  });
+
+  it("denies enumerating the reports collection", async () => {
+    await assertFails(asOwnerA().collection("reports").get());
+  });
+
+  it("denies writing a report from the client", async () => {
+    await assertFails(
+      asOwnerA().doc("reports/forged").set({ workspaceId: WS_A, publicToken: "mine" }),
+    );
+  });
+});
+
+describe("smartlinks — public link-in-bio", () => {
+  it("denies an owner reading a smartlink (counts must move server-side)", async () => {
+    await assertFails(asOwnerA().doc("smartlinks/sl_a").get());
+  });
+
+  it("denies a client inflating a click counter", async () => {
+    await assertFails(asOwnerA().doc("smartlinks/sl_a").update({ totalClicks: 999_999 }));
+  });
+
+  it("denies reading or writing click attribution", async () => {
+    await assertFails(asOwnerA().doc("smartlinkClicks/post_pending").get());
+    await assertFails(asOwnerA().doc("smartlinkClicks/post_pending").update({ clicks: 999 }));
   });
 });
 

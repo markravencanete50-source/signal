@@ -25,11 +25,21 @@ function post(pillar?: string): Post {
 describe("pillar balance", () => {
   it("computes actual vs target over tagged posts only", () => {
     // 4 Listings, 1 Education, 0 Team → 80/20/0.
-    const posts = [post("Listings"), post("Listings"), post("Listings"), post("Listings"), post("Education"), post()];
+    const posts = [
+      post("Listings"),
+      post("Listings"),
+      post("Listings"),
+      post("Listings"),
+      post("Education"),
+      post(),
+    ];
     const balance = computePillarBalance(pillars, posts);
 
     expect(balance.find((b) => b.name === "Listings")).toMatchObject({ actualPct: 80, gapPct: 40 });
-    expect(balance.find((b) => b.name === "Education")).toMatchObject({ actualPct: 20, gapPct: -10 });
+    expect(balance.find((b) => b.name === "Education")).toMatchObject({
+      actualPct: 20,
+      gapPct: -10,
+    });
     expect(balance.find((b) => b.name === "Team")).toMatchObject({ actualPct: 0, gapPct: -30 });
   });
 

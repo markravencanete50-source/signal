@@ -5,9 +5,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getAdapter } from "@/adapters/registry";
+import { sendApprovalRequestEmail } from "@/lib/approvals/send-request-email";
 import { requireBrandAccess } from "@/lib/auth/dal";
+import { requestApproval } from "@/lib/db/approvals";
 import { getAsset } from "@/lib/db/media";
-import { createPost } from "@/lib/db/posts";
+import { createPost, getPost } from "@/lib/db/posts";
+import { listTeamMembers } from "@/lib/db/workspaces";
 import { WRITER_ROLES, type PostStatus, type PostVariant, type PostVariants } from "@/types";
 
 /**
@@ -83,7 +86,7 @@ export async function submitPost(_prev: ComposeState, formData: FormData): Promi
       return { error: "Pick a time to schedule this post." };
     }
 
-    await createPost({
+    const postId = await createPost({
       brandId: data.brandId,
       workspaceId,
       createdBy: session.uid,
@@ -91,10 +94,6 @@ export async function submitPost(_prev: ComposeState, formData: FormData): Promi
       scheduledAt,
       pillar: data.pillar,
       variants,
-      approval:
-        data.intent === "request_approval"
-          ? { required: true, requestedFrom: undefined }
-          : undefined,
       aiMeta:
         data.predictedScore !== undefined
           ? {
@@ -105,7 +104,15 @@ export async function submitPost(_prev: ComposeState, formData: FormData): Promi
           : undefined,
     });
 
+    // Approval flow: mint a token and email the workspace's client(s) a
+    // one-click approve/reject link. A missing email isn't fatal — the post
+    // still sits in Approvals for a team member to hand off.
+    if (data.intent === "request_approval") {
+      await sendApprovalRequest(postId, workspaceId).catch(() => {});
+    }
+
     revalidatePath("/planner");
+    revalidatePath("/approvals");
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not save the post." };
   }
@@ -168,4 +175,22 @@ async function validateMedia(variants: PostVariants): Promise<string | null> {
     }
   }
   return null;
+}
+
+/**
+ * Mint an approval token and email the workspace's client(s) a one-click link.
+ *
+ * `requestApproval` records the first client as `requestedFrom` for the audit
+ * trail; `sendApprovalRequestEmail` handles recipient resolution and the render.
+ * Best-effort — a Resend outage leaves the post in Approvals for manual handling.
+ */
+async function sendApprovalRequest(postId: string, workspaceId: string): Promise<void> {
+  const clients = (await listTeamMembers(workspaceId)).filter(
+    (m) => m.role === "client" && m.email,
+  );
+  const token = await requestApproval(postId, clients[0]?.email ?? "");
+  if (clients.length === 0) return; // no client to email; post sits in Approvals
+
+  const post = await getPost(postId);
+  if (post) await sendApprovalRequestEmail(post, token);
 }
