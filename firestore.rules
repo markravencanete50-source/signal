@@ -270,5 +270,15 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if false;
     }
+
+    // ---------------------------------------------------------------------
+    // platformChanges — admin-curated Pulse feed. Members read; admins edit.
+    // ---------------------------------------------------------------------
+    match /platformChanges/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if canAdmin(request.resource.data.workspaceId);
+      allow update: if canAdmin(resource.data.workspaceId) && staysInWorkspace();
+      allow delete: if canAdmin(resource.data.workspaceId);
+    }
   }
 }

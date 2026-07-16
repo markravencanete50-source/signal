@@ -217,3 +217,28 @@ the role — so it is treated like one:
 
 A client-readable version would let any member list live tokens and self-promote
 to owner, which is exactly the escalation the members rule prevents.
+
+## 014 — Intent-score normalisation curve and missing-signal handling
+
+**Date:** 2026-07-16 · **Phase:** 3 · **Status:** accepted
+
+The spec gives the intent formula (weights 0.30/0.30/0.25/0.15) and says rates
+are "normalised against the brand's trailing-90-day averages", but leaves two
+things to judgement.
+
+**Normalisation curve.** Chosen: a signal at the brand's 90-day average maps to
+0.5 for that component; 2× the average (or better) saturates it at 1.0; zero maps
+to 0. So an exactly-average post scores **50**, and a post that doubles every
+signal scores **100**. This makes the score a bounded [0,100] read on "how far
+above/below this brand's own baseline", which is the point — it's self-relative,
+not an absolute benchmark. (The preview's illustrative "avg 71" is mock data, not
+a formula constraint; the exit criterion is only that scores are computed.)
+
+**Missing signals.** Facebook reports no saves or watch-completion. Treating
+those as zero would unfairly tank every FB post. Instead the weights are
+**re-normalised over only the signals a platform actually reports**, so a score
+stays comparable within a platform. A brand's first posts (no 90-day baseline
+yet) normalise any non-zero signal to 1 rather than dividing by zero.
+
+Both choices are isolated in the pure `services/intent.ts` and unit-tested, so
+the curve can be retuned without touching the sync engine.

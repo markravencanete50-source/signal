@@ -4,6 +4,47 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 3 — Analytics, Intent, Pulse
+
+**Added**
+
+- **Sync engine** (`/api/cron/sync`, hourly): per active connection, pulls
+  account insights → `metricsDaily` and re-fetches metrics for posts <14 days old
+  → `postMetrics` with a computed intent score; ingests new comments → `inboxItems`
+  with batched Claude sentiment classification (positive/neutral/negative/**lead**).
+  Then per workspace runs cross-brand anomaly detection and notifies. Idempotent
+  via deterministic doc ids.
+- **Intent scoring** (pure `services/intent.ts`): the spec's weighted formula,
+  normalised so an exactly-average post scores 50 and a 2×-baseline post 100, with
+  weights re-normalised over the signals a platform actually reports (so Facebook
+  posts aren't tanked for lacking saves/watch-time). Weights are per-workspace.
+- **Anomaly detection** (pure `services/anomaly.ts`): a >40% reach drop (7-day avg
+  vs prior 7) flagged `platform_side` when ≥2 brands drop at once, else
+  `content_side` — the "is it you, or is it the algorithm?" verdict, with a
+  human-readable reasoning string.
+- **Analytics view**: theme-aware recharts reach/engagement chart (colours are CSS
+  variables, so they flip with the theme), intent-by-format bars, follower split,
+  and a score-ringed post table, with 7/30/90-day ranges.
+- **Dashboard**: real metric cards + SVG sparklines, today's queue, top posts, and
+  a fresh-anomaly banner.
+- **Pulse**: per-platform status cards, the anomaly log timeline with verdicts +
+  reasoning, native-format-guard stats, and the admin-editable platform-changes
+  feed (`platformChanges` collection).
+- Metrics/anomalies/inbox/platform-changes repositories; `lib/ai/sentiment.ts`;
+  `services/analytics.ts` (pure shaping) with unit tests.
+
+**Verification**
+
+- 24 unit + 35 rules + 4 integration tests pass. The Phase 3 exit criterion — a
+  simulated cross-brand reach drop producing a `platform_side` anomaly — is proven
+  by a sync integration test.
+
+**Changed**
+
+- Added `platformChanges` collection + rules (admin-editable, member-readable) and
+  four query indexes (inbox by receivedAt, platform-changes, metricsDaily desc).
+  Intent-score normalisation choices recorded in DECISIONS #014.
+
 ### Phase 2 — Composer, Planner, Publishing, Media
 
 **Added**

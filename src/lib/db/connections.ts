@@ -64,6 +64,25 @@ export async function listConnectionsForWorkspace(workspaceId: string): Promise<
   return snap.docs.map((d) => docToConnection(d.id, d.data()));
 }
 
+/** Every active connection across all workspaces — the sync cron's work list. */
+export async function listActiveConnections(): Promise<Connection[]> {
+  const snap = await adminDb().collection(COLLECTION).where("status", "==", "active").get();
+  return snap.docs.map((d) => docToConnection(d.id, d.data()));
+}
+
+/**
+ * Connections whose token expires within `days` — the token-refresh cron's work
+ * list. Uses the (status, tokenExpiresAt) index.
+ */
+export async function listExpiringConnections(withinIso: string): Promise<Connection[]> {
+  const snap = await adminDb()
+    .collection(COLLECTION)
+    .where("status", "==", "active")
+    .where("tokenExpiresAt", "<=", withinIso)
+    .get();
+  return snap.docs.map((d) => docToConnection(d.id, d.data()));
+}
+
 /**
  * Decrypt a connection's access token for adapter use.
  *

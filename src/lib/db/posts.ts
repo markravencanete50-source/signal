@@ -109,6 +109,22 @@ export async function listPostsByStatus(workspaceId: string, status: PostStatus)
 }
 
 /**
+ * Published posts for a brand within the trailing window — the sync engine only
+ * re-fetches insights for posts <14 days old (older posts' metrics are settled).
+ * publishedAt is filtered in memory since the published set is already small.
+ */
+export async function listRecentlyPublished(brandId: string, sinceIso: string): Promise<Post[]> {
+  const snap = await adminDb()
+    .collection(COLLECTION)
+    .where("brandId", "==", brandId)
+    .where("status", "==", "published")
+    .get();
+  return snap.docs
+    .map((d) => docToPost(d.id, d.data()))
+    .filter((p) => (p.publishedAt ?? "") >= sinceIso);
+}
+
+/**
  * Atomically claim up to `limit` posts that are due to publish.
  *
  * This is the linchpin of the publish engine's idempotency. Each post is flipped
