@@ -1,7 +1,7 @@
 import { listPostsInRange } from "@/lib/db/posts";
 import { requireTeamView } from "@/lib/auth/view-guard";
 import { getAppContext } from "@/lib/workspace-context";
-import { VARIANT_KEY, type Platform, type PostStatus } from "@/types";
+import { type Platform } from "@/types";
 
 import { PlannerCalendar, type CalendarPost } from "./planner-calendar";
 
@@ -84,7 +84,3 @@ function summarise(caption: string): string {
   const firstLine = caption.split("\n")[0] ?? "";
   return firstLine.slice(0, 24) || "Post";
 }
-
-/** Re-exported so the client component's status colours stay in one place. */
-export type { PostStatus };
-export { VARIANT_KEY };
