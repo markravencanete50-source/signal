@@ -13,7 +13,7 @@
     "emulators": "firebase emulators:start --only auth,firestore",
     "test:unit": "vitest run tests/unit",
     "test:rules": "firebase emulators:exec --only firestore --project signal-test \"vitest run --dir tests/rules\"",
-    "test:integration": "firebase emulators:exec --only firestore --project signal-integration \"vitest run tests/integration\""
+    "test:integration": "firebase emulators:exec --only firestore --project signal-integration \"vitest run --no-file-parallelism tests/integration\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

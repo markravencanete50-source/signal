@@ -84,10 +84,17 @@ export const facebookAdapter: PlatformAdapter = {
 
     const longLived = await exchangeForLongLivedToken(shortLived.access_token);
 
-    const accounts = await graphFetch<{ data: FbAccount[] }>("/me/accounts", {
-      accessToken: longLived.accessToken,
-      params: { fields: "id,name,access_token" },
-    });
+    const [accounts, me] = await Promise.all([
+      graphFetch<{ data: FbAccount[] }>("/me/accounts", {
+        accessToken: longLived.accessToken,
+        params: { fields: "id,name,access_token" },
+      }),
+      // The authorising user's app-scoped id, for the compliance callbacks.
+      graphFetch<{ id: string }>("/me", {
+        accessToken: longLived.accessToken,
+        params: { fields: "id" },
+      }).catch(() => null),
+    ]);
 
     const page = accounts.data[0];
     if (!page) {
@@ -103,6 +110,7 @@ export const facebookAdapter: PlatformAdapter = {
       scopes: [...META_SCOPES],
       pageId: page.id,
       accountName: page.name,
+      authorizingUserId: me?.id,
     };
   },
 

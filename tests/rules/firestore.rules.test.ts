@@ -97,6 +97,12 @@ beforeEach(async () => {
       clicks: 7,
     });
 
+    await db.doc(`metaDeletionRequests/code_a`).set({
+      code: "code_a",
+      metaUserId: "meta_user_1",
+      status: "completed",
+    });
+
     await db.doc(`autolists/al_a`).set({
       workspaceId: WS_A,
       brandId: "brand_a",
@@ -206,6 +212,18 @@ describe("smartlinks — public link-in-bio", () => {
   it("denies reading or writing click attribution", async () => {
     await assertFails(asOwnerA().doc("smartlinkClicks/post_pending").get());
     await assertFails(asOwnerA().doc("smartlinkClicks/post_pending").update({ clicks: 999 }));
+  });
+});
+
+describe("metaDeletionRequests — deletion log", () => {
+  it("denies an owner reading a deletion request (Admin-SDK only)", async () => {
+    await assertFails(asOwnerA().doc("metaDeletionRequests/code_a").get());
+  });
+
+  it("denies any client write", async () => {
+    await assertFails(
+      asOwnerA().doc("metaDeletionRequests/forged").set({ code: "forged", metaUserId: "x" }),
+    );
   });
 });
 

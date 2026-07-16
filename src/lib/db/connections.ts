@@ -136,6 +136,7 @@ export async function upsertConnection(params: {
     status: "active",
     accountName: tokens.accountName,
     connectedByName,
+    metaUserId: tokens.authorizingUserId,
   };
 
   // Firestore rejects explicit undefined; strip rather than write nulls, which
@@ -178,4 +179,14 @@ export async function touchLastSync(id: string): Promise<void> {
 
 export async function deleteConnection(id: string): Promise<void> {
   await adminDb().doc(`${COLLECTION}/${id}`).delete();
+}
+
+/**
+ * Connections a given Meta user authorised — the deauthorize / data-deletion
+ * callbacks arrive keyed by this app-scoped id. Empty when nothing matches (e.g.
+ * a connection made before we started recording it).
+ */
+export async function listConnectionsByMetaUser(metaUserId: string): Promise<Connection[]> {
+  const snap = await adminDb().collection(COLLECTION).where("metaUserId", "==", metaUserId).get();
+  return snap.docs.map((d) => docToConnection(d.id, d.data()));
 }

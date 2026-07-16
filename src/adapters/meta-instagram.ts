@@ -110,17 +110,24 @@ export const instagramAdapter: PlatformAdapter = {
     const longLived = await exchangeForLongLivedToken(shortLived.access_token);
 
     // The IG account hangs off the Page, so ask for it in the same call.
-    const accounts = await graphFetch<{
-      data: Array<{
-        id: string;
-        name: string;
-        access_token: string;
-        instagram_business_account?: { id: string; username?: string };
-      }>;
-    }>("/me/accounts", {
-      accessToken: longLived.accessToken,
-      params: { fields: "id,name,access_token,instagram_business_account{id,username}" },
-    });
+    const [accounts, me] = await Promise.all([
+      graphFetch<{
+        data: Array<{
+          id: string;
+          name: string;
+          access_token: string;
+          instagram_business_account?: { id: string; username?: string };
+        }>;
+      }>("/me/accounts", {
+        accessToken: longLived.accessToken,
+        params: { fields: "id,name,access_token,instagram_business_account{id,username}" },
+      }),
+      // The authorising user's app-scoped id, for the compliance callbacks.
+      graphFetch<{ id: string }>("/me", {
+        accessToken: longLived.accessToken,
+        params: { fields: "id" },
+      }).catch(() => null),
+    ]);
 
     const page = accounts.data.find((a) => a.instagram_business_account);
     if (!page?.instagram_business_account) {
@@ -138,6 +145,7 @@ export const instagramAdapter: PlatformAdapter = {
       accountName: page.instagram_business_account.username
         ? `@${page.instagram_business_account.username}`
         : page.name,
+      authorizingUserId: me?.id,
     };
   },
 

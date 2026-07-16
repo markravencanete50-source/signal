@@ -115,6 +115,17 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // metaDeletionRequests — TOTAL CLIENT LOCKOUT
+    //
+    // Logged by the Meta data-deletion callback and read by the public status
+    // page, both via the Admin SDK. Keyed by an unguessable confirmation code and
+    // holding a Meta user id — never exposed to client SDK reads.
+    // ---------------------------------------------------------------------
+    match /metaDeletionRequests/{code} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------------
     // users — a user reads and edits only their own profile doc
     // ---------------------------------------------------------------------
     match /users/{uid} {

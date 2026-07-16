@@ -330,3 +330,35 @@ the latest reading + 30-day growth are denormalised onto the parent so the table
 renders in one read. The comparison insight is client-loaded so the table never
 blocks on a Claude call, and both the table and the insight read the same
 `buildCompetitorRows` so their numbers can't disagree.
+
+## 020 — Meta compliance callbacks authenticated by signed_request only
+
+**Date:** 2026-07-17 · **Phase:** 7 · **Status:** accepted
+
+The deauthorize and data-deletion callbacks are public, session-less endpoints
+Meta calls server-to-server. Their ONLY authentication is the `signed_request`
+HMAC-SHA256 signature, verified with the app secret via a constant-time compare
+(`lib/meta/signed-request.ts`); an unsigned or tampered body is rejected before
+any data is touched. To let these callbacks act on the right data — they arrive
+keyed by the Meta user's app-scoped id — the OAuth exchange now records that id
+(`authorizingUserId` → `connection.metaUserId`) via a `/me?fields=id` call. The
+"personal data" we hold for a Meta user is their connection (the token they
+granted), so deletion = removing those connections; brand-level aggregates aren't
+personal to the individual and stay with the agency. Data-deletion returns the
+Meta-required `{ url, confirmation_code }` and logs the request under that code so
+the public `/data-deletion/{code}` page can confirm the outcome
+(`metaDeletionRequests`, deny-all — Admin-SDK only).
+
+## 021 — Token refresh: distinguish transient from terminal failures
+
+**Date:** 2026-07-17 · **Phase:** 7 · **Status:** accepted
+
+The daily token-refresh cron refreshes connections within 7 days of expiry. A
+refresh can fail two ways, and conflating them is harmful: a _terminal_ failure
+(auth error, or the token is already past expiry) means the user must reconnect —
+so we mark the connection `expired` and notify admins. A _transient_ failure
+(network, rate limit) must NOT change status, because `expired` drops the row
+from the active-and-expiring query and it would never be retried; instead we
+leave it `active` so the next daily run tries again. The 7-day head start gives a
+week of retries before a token actually dies. The whole run is idempotent — a
+refreshed token falls outside the window next time.

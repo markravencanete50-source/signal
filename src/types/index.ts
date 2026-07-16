@@ -153,6 +153,11 @@ export interface Connection {
   /** Display-only; the account name shown on the health card. */
   accountName: string;
   connectedByName?: string;
+  /**
+   * App-scoped id of the Meta user who authorised this connection. Set at OAuth
+   * time; used by the deauthorize / data-deletion callbacks to locate the row.
+   */
+  metaUserId?: string;
 }
 
 /**

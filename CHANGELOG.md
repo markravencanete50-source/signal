@@ -4,6 +4,33 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 7 — Production hardening
+
+**Added**
+
+- **Meta token-refresh cron** (`lib/token-refresh.ts`, `/api/cron/tokens` — daily;
+  the route the vercel.json entry pointed at was missing and 404'd). Refreshes
+  long-lived tokens within 7 days of expiry via the adapter, re-encrypts and
+  stores them, and — on a genuine failure (auth error or already expired) — marks
+  the connection `expired` and notifies the workspace admins to reconnect. A
+  transient failure is left active to retry. Idempotent; integration-tested.
+- **Meta App Review compliance callbacks**: `/api/meta/deauthorize` and
+  `/api/meta/data-deletion`, both public and authenticated solely by verifying
+  Meta's `signed_request` HMAC-SHA256 signature (`lib/meta/signed-request.ts`,
+  constant-time compare, unit-tested). Deauthorize revokes the user's
+  connections; data-deletion removes them, logs the request under a confirmation
+  code, and returns the required `{ url, confirmation_code }` pointing at a public
+  status page (`/data-deletion/[code]`). OAuth now records the authorising Meta
+  user id on the connection so these callbacks can target the right rows.
+
+**Verified**
+
+- Ran the emulator suites (Java now available): **49 rules tests** — confirming
+  the Phase 5/6 reports/smartlinks deny-all security fix holds — and **6
+  integration tests** including the new token-refresh end-to-end. Made
+  `test:integration` run sequentially (`--no-file-parallelism`) so the three
+  suites don't overload a single shared emulator.
+
 ### Phase 6 — Inbox, Autolists, Competitors
 
 **Added**

@@ -51,13 +51,16 @@ export const config = {
    * surfaces that must work signed-out:
    *   - /api/*     — route handlers authorise themselves (cron secret, webhook
    *                  signature, session); a redirect here would break them
-   *   - /r/*       — white-label public reports, no auth by design
-   *   - /approve/* — one-click email approval, no login by design
-   *   - /s/*       — public SmartLink (link-in-bio) pages, no auth by design
+   *   - /r/*             — white-label public reports, no auth by design
+   *   - /approve/*       — one-click email approval, no login by design
+   *   - /s/*             — public SmartLink (link-in-bio) pages, no auth by design
+   *   - /data-deletion/* — public Meta data-deletion status page, no auth by design
    *   - /_next/*, favicon, images — static
    *
    * The trailing `.*\\.[\\w]+$` clause excludes any file-with-extension so real
    * files (og images, manifests) pass through without a redirect.
    */
-  matcher: ["/((?!api|r/|approve/|s/|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)"],
+  matcher: [
+    "/((?!api|r/|approve/|s/|data-deletion/|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)",
+  ],
 };

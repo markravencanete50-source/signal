@@ -22,6 +22,13 @@ export interface TokenSet {
   /** Set only for Instagram connections. */
   igUserId?: string;
   accountName: string;
+  /**
+   * App-scoped id of the Meta user who authorised the connection. Stored so the
+   * deauthorize and data-deletion callbacks (which arrive keyed by this id) can
+   * find the right connection. Optional — a missing value just means those
+   * callbacks can't auto-match this row.
+   */
+  authorizingUserId?: string;
 }
 
 export interface PublishResult {

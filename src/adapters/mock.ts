@@ -109,6 +109,7 @@ export function createMockAdapter(platform: Platform): PlatformAdapter {
         pageId: `mock_page_${hash(code) % 100000}`,
         igUserId: isIg ? `mock_ig_${hash(code) % 100000}` : undefined,
         accountName: isIg ? "@houseoflettings" : "House of Lettings",
+        authorizingUserId: `mock_user_${hash(code) % 100000}`,
       };
     },
 
