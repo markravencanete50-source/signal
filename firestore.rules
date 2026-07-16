@@ -193,6 +193,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Coherence cache — derived AI result, server-written, member-readable.
+    match /coherenceScores/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow write: if false;
+    }
+
     match /competitors/{id} {
       allow read: if isMember(resource.data.workspaceId);
       allow create, update, delete: if canWrite(resource.data.workspaceId);

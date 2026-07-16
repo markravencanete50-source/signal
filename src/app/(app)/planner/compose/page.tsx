@@ -1,7 +1,10 @@
-import { listAssets } from "@/lib/db/media";
-import { listConnectionsForBrand } from "@/lib/db/connections";
 import { requireTeamView } from "@/lib/auth/view-guard";
+import { listConnectionsForBrand } from "@/lib/db/connections";
+import { listAssets } from "@/lib/db/media";
+import { listPostMetrics } from "@/lib/db/metrics";
 import { getAppContext } from "@/lib/workspace-context";
+import { bestTimeSlots, type PostTiming } from "@/services/besttime";
+import type { Platform } from "@/types";
 
 import { Composer } from "./composer";
 
@@ -11,13 +14,18 @@ export const metadata = { title: "New post — Signal" };
  * Composer route `/planner/compose`. Server-loads the brand's media, connected
  * platforms and best-time slots, then hands off to the client modal.
  *
- * Rendered as a full route (not an overlay portal) so it deep-links and the
- * back button behaves. On desktop the client component styles itself as the
- * preview's centred modal over a dimmed backdrop.
+ * Accepts a `?caption=` prefill (from Studio's "Draft it") so a suggestion lands
+ * as a ready-to-edit draft. Best-time slots are computed from the brand's own
+ * post metrics via the pure engine.
  */
-export default async function ComposePage() {
+export default async function ComposePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ caption?: string }>;
+}) {
   await requireTeamView();
   const { activeBrand, workspace } = await getAppContext();
+  const params = await searchParams;
 
   if (!activeBrand) {
     return (
@@ -36,12 +44,15 @@ export default async function ComposePage() {
     );
   }
 
-  const [assets, connections] = await Promise.all([
+  const [assets, connections, metrics] = await Promise.all([
     listAssets(workspace.id),
     listConnectionsForBrand(activeBrand.id),
+    listPostMetrics(activeBrand.id, 200),
   ]);
 
   const connectedPlatforms = connections.map((c) => c.platform);
+  const primary: Platform = connectedPlatforms[0] ?? "ig";
+  const bestTimes = bestTimeSlots(toTimings(metrics), primary);
 
   const mediaOptions = assets.map((a) => ({
     id: a.id,
@@ -57,6 +68,16 @@ export default async function ComposePage() {
       connectedPlatforms={connectedPlatforms}
       media={mediaOptions}
       pillars={activeBrand.pillars.map((p) => p.name)}
+      bestTimes={bestTimes}
+      initialCaption={params.caption ?? ""}
     />
   );
+}
+
+/** Build best-time timing samples from stored post metrics. */
+function toTimings(metrics: { publishedAt: string; intentScore: number }[]): PostTiming[] {
+  return metrics.map((m) => {
+    const d = new Date(m.publishedAt);
+    return { weekday: d.getDay(), hour: d.getHours(), intentScore: m.intentScore };
+  });
 }

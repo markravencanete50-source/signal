@@ -1,3 +1,4 @@
+import { AskSignal } from "@/components/layout/ask-signal";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -46,6 +47,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
 
       <BottomNav role={role} counts={counts} />
+
+      {/* Ask Signal is available on every authed page, scoped to the active brand. */}
+      {activeBrand && <AskSignal brandId={activeBrand.id} userName={user.name} />}
     </div>
   );
 }

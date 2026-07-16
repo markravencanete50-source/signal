@@ -125,6 +125,24 @@ export async function listRecentlyPublished(brandId: string, sinceIso: string): 
 }
 
 /**
+ * The brand's most recent post captions (published or scheduled), newest first —
+ * the input to the coherence engine. Prefers the IG caption, falls back to FB.
+ */
+export async function getRecentCaptions(brandId: string, limit: number): Promise<string[]> {
+  const snap = await adminDb().collection(COLLECTION).where("brandId", "==", brandId).get();
+
+  return snap.docs
+    .map((d) => docToPost(d.id, d.data()))
+    .filter((p) => p.status === "published" || p.status === "scheduled")
+    .sort((a, b) =>
+      (b.publishedAt ?? b.scheduledAt ?? "").localeCompare(a.publishedAt ?? a.scheduledAt ?? ""),
+    )
+    .map((p) => (p.variants.instagram?.caption ?? p.variants.facebook?.caption ?? "").trim())
+    .filter((c) => c.length > 0)
+    .slice(0, limit);
+}
+
+/**
  * Atomically claim up to `limit` posts that are due to publish.
  *
  * This is the linchpin of the publish engine's idempotency. Each post is flipped

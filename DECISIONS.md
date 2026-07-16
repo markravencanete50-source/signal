@@ -242,3 +242,17 @@ yet) normalise any non-zero signal to 1 rather than dividing by zero.
 
 Both choices are isolated in the pure `services/intent.ts` and unit-tested, so
 the curve can be retuned without touching the sync engine.
+
+## 015 — `coherenceScores` cache collection (per brand per day)
+
+**Date:** 2026-07-16 · **Phase:** 4 · **Status:** accepted
+
+The spec says the coherence score is "cached per brand per day". The data model
+has no collection for it, and it's a derived AI result, not tenant content.
+
+Chosen: a `coherenceScores/{brandId}_{YYYY-MM-DD}` cache doc, written by the
+coherence engine, read by Studio and the Dashboard. Deterministic id = at most
+one Claude coherence call per brand per day regardless of how many times the
+views render. Rules: member-read, server-write-only (same shape as the other
+derived-analytics collections). A stale doc simply isn't read the next day; no
+eviction needed.

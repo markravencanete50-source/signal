@@ -4,6 +4,43 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 4 — Studio, Ask Signal, Best Time
+
+**Added**
+
+- **Grounding layer** (`lib/ai/brand-context.ts`): assembles a compact data pack
+  from the brand's real synced metrics and renders it into prompts, emitting ONLY
+  numbers that are actually present. This is what makes "never invent numbers"
+  enforceable — a metric the brand lacks never reaches the model.
+- **`/api/ai/suggest`**: 3 scored next-post suggestions, each with a full
+  signal→why→action reasoning chain grounded in the data pack; includes
+  retire/convert recommendations for underperforming series.
+- **`/api/ai/ask`** (Ask Signal): streaming grounded Q&A. Answers reach / next-post
+  / comparison questions from the brand's data and declines out-of-data questions
+  rather than inventing.
+- **Coherence engine** (`lib/ai/coherence.ts`): Claude scores the last 12 captions
+  0–100 for niche clarity, cached per brand per day (`coherenceScores` collection).
+- **Studio view**: coherence ring, pillar-balance bar (actual vs target),
+  client-loaded suggestion cards with reasoning chains + "Draft it", and "Generate
+  this week's plan" (5 best-time drafts).
+- **Ask Signal**: floating chat panel matching the preview, token-streamed
+  responses, suggested question chips, mounted app-wide.
+- **Best-time chips** wired into the Composer (from the pure `besttime` engine over
+  the brand's own metrics, labelled personalised vs generic); "Draft it" prefills
+  the Composer via `?caption=`.
+- Pure `services/pillars.ts` with unit tests.
+
+**Verification**
+
+- 27 unit + 35 rules tests pass. A grounding unit test proves the data pack omits
+  absent metrics (the mechanism behind "cites actual numbers"); typecheck / lint /
+  format / build green. Live-AI exit checks (grounded suggestions, Ask Signal
+  answer/decline) require an Anthropic key.
+
+**Changed**
+
+- Added `coherenceScores` collection + rules (DECISIONS #015).
+
 ### Phase 3 — Analytics, Intent, Pulse
 
 **Added**

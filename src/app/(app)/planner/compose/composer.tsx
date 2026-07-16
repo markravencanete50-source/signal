@@ -31,18 +31,29 @@ const CAPTION_LIMIT: Record<Platform, number> = { ig: 2200, fb: 63206 };
 
 type VariantTab = "shared" | "fb" | "ig";
 
+export interface BestTimeSlot {
+  weekday: number;
+  hour: number;
+  label: string;
+  personalised: boolean;
+}
+
 export function Composer({
   brandId,
   brandName,
   connectedPlatforms,
   media,
   pillars,
+  bestTimes = [],
+  initialCaption = "",
 }: {
   brandId: string;
   brandName: string;
   connectedPlatforms: Platform[];
   media: MediaOption[];
   pillars: string[];
+  bestTimes?: BestTimeSlot[];
+  initialCaption?: string;
 }) {
   const router = useRouter();
 
@@ -51,7 +62,8 @@ export function Composer({
   const [platforms, setPlatforms] = useState<Set<Platform>>(new Set(initial));
 
   const [tab, setTab] = useState<VariantTab>("shared");
-  const [shared, setShared] = useState("");
+  // Prefilled from Studio's "Draft it" — lands as the shared caption.
+  const [shared, setShared] = useState(initialCaption);
   const [fbCaption, setFbCaption] = useState("");
   const [igCaption, setIgCaption] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<string[]>([]);
@@ -380,6 +392,31 @@ export function Composer({
             </label>
           </div>
 
+          {/* best-time chips — from the brand's own data (or labelled benchmarks) */}
+          {bestTimes.length > 0 && (
+            <>
+              <span className="mt-[18px] mb-2 block text-[0.78rem] font-semibold">
+                Best time —{" "}
+                {bestTimes[0]?.personalised
+                  ? "from your own data"
+                  : "generic until we learn your audience"}
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {bestTimes.map((slot) => (
+                  <button
+                    key={slot.label}
+                    type="button"
+                    onClick={() => setScheduledAt(nextDateForSlot(slot.weekday, slot.hour))}
+                    className="border-border text-text-2 hover:border-accent hover:text-accent flex items-center gap-1.5 rounded-[10px] border-[1.5px] px-3 py-2 text-[0.8rem] font-semibold transition-colors"
+                  >
+                    {slot.personalised && <span className="text-chart-3">★</span>}
+                    {slot.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
           {/* predicted score */}
           {(score || scoring) && (
             <div className="bg-surface-2 mt-[18px] flex items-center gap-4 rounded-[14px] p-4">
@@ -432,4 +469,21 @@ export function Composer({
       </div>
     </div>
   );
+}
+
+/**
+ * Next occurrence of a weekday+hour, formatted for a datetime-local input
+ * (local YYYY-MM-DDTHH:mm). Picks the soonest future match — if today's slot
+ * has passed, it rolls to next week.
+ */
+function nextDateForSlot(weekday: number, hour: number): string {
+  const now = new Date();
+  const d = new Date(now);
+  let delta = (weekday - now.getDay() + 7) % 7;
+  if (delta === 0 && now.getHours() >= hour) delta = 7;
+  d.setDate(now.getDate() + delta);
+  d.setHours(hour, 0, 0, 0);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

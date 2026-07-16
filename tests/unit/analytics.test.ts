@@ -22,7 +22,11 @@ function daily(date: string, reach: number, engagement = 100, followers = 5000):
   };
 }
 
-function post(format: PostMetrics["format"], intentScore: number, extra: Partial<PostMetrics> = {}): PostMetrics {
+function post(
+  format: PostMetrics["format"],
+  intentScore: number,
+  extra: Partial<PostMetrics> = {},
+): PostMetrics {
   return {
     postId: "p" + Math.random(),
     brandId: "b",
@@ -56,11 +60,7 @@ describe("reachEngagementSeries", () => {
 
 describe("intentByFormat", () => {
   it("averages intent per format, ordered video → carousel → static", () => {
-    const result = intentByFormat([
-      post("video", 80),
-      post("video", 60),
-      post("image", 40),
-    ]);
+    const result = intentByFormat([post("video", 80), post("video", 60), post("image", 40)]);
     expect(result).toEqual([
       { format: "video", avgIntent: 70, count: 2 },
       { format: "image", avgIntent: 40, count: 1 },
@@ -86,8 +86,10 @@ describe("headlineMetrics", () => {
   it("computes the 7-day reach delta vs the prior 7 days", () => {
     const series: MetricsDaily[] = [];
     // prior 7 days: reach 100 each; recent 7 days: reach 200 each.
-    for (let i = 13; i >= 7; i--) series.push(daily(`2026-07-${String(20 - i).padStart(2, "0")}`, 100));
-    for (let i = 6; i >= 0; i--) series.push(daily(`2026-07-${String(20 - i).padStart(2, "0")}`, 200));
+    for (let i = 13; i >= 7; i--)
+      series.push(daily(`2026-07-${String(20 - i).padStart(2, "0")}`, 100));
+    for (let i = 6; i >= 0; i--)
+      series.push(daily(`2026-07-${String(20 - i).padStart(2, "0")}`, 200));
 
     const h = headlineMetrics(series, [post("image", 80), post("image", 60)]);
     expect(h.reach7d).toBe(1400); // 7 × 200
