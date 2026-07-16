@@ -66,6 +66,45 @@ export async function createWorkspace(params: {
   return { id: ref.id, ...workspace };
 }
 
+/**
+ * Find the workspace a Stripe customer belongs to — the webhook's lookup. The
+ * customer id is denormalised onto the workspace at checkout, so this is a single
+ * indexed query.
+ */
+export async function getWorkspaceByStripeCustomer(customerId: string): Promise<Workspace | null> {
+  const snap = await adminDb()
+    .collection("workspaces")
+    .where("stripeCustomerId", "==", customerId)
+    .limit(1)
+    .get();
+  const doc = snap.docs[0];
+  if (!doc) return null;
+  return { id: doc.id, ...doc.data() } as Workspace;
+}
+
+/**
+ * Persist billing state. Written ONLY server-side — from checkout (customer id)
+ * and the Stripe webhook (plan/status). Firestore rules forbid clients touching
+ * these fields, so this Admin-SDK path is the sole writer.
+ */
+export async function setWorkspaceBilling(
+  workspaceId: string,
+  billing: Partial<
+    Pick<
+      Workspace,
+      | "plan"
+      | "stripeCustomerId"
+      | "stripeSubscriptionId"
+      | "subscriptionStatus"
+      | "currentPeriodEnd"
+    >
+  >,
+): Promise<void> {
+  const clean = Object.fromEntries(Object.entries(billing).filter(([, v]) => v !== undefined));
+  if (Object.keys(clean).length === 0) return;
+  await adminDb().doc(`workspaces/${workspaceId}`).update(clean);
+}
+
 export async function getMember(workspaceId: string, uid: string): Promise<Member | null> {
   const snap = await adminDb().doc(`workspaces/${workspaceId}/members/${uid}`).get();
   if (!snap.exists) return null;

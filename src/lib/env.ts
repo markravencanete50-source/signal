@@ -48,6 +48,14 @@ const serverSchema = z.object({
 
   CRON_SECRET: z.string().min(1),
 
+  // Stripe — OPTIONAL. Billing is a drop-in: with these unset the app runs
+  // exactly as before and the Billing screen shows an "unconfigured" state,
+  // mirroring how AI degrades without ANTHROPIC_API_KEY. Only `stripe()` and the
+  // billing routes read them, so their absence never breaks publish/sync/etc.
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  STRIPE_PRICE_PRO: z.string().min(1).optional(),
+
   USE_MOCK_ADAPTERS: z
     .enum(["true", "false"])
     .default("true")

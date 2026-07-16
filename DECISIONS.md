@@ -362,3 +362,28 @@ from the active-and-expiring query and it would never be retried; instead we
 leave it `active` so the next daily run tries again. The 7-day head start gives a
 week of retries before a token actually dies. The whole run is idempotent — a
 refreshed token falls outside the window next time.
+
+## 022 — Billing is per-workspace; Stripe is the source of truth, mirrored by webhook
+
+**Date:** 2026-07-17 · **Phase:** 8 · **Status:** accepted
+
+The billing entity is the **workspace** (the agency), not a user — one Stripe
+customer and one subscription per workspace, denormalised onto the workspace doc.
+Stripe owns the truth; the app never trusts client input for plan state. The
+signature-verified `/api/webhooks/stripe` is the ONLY writer of `plan` /
+`stripe*` / `subscriptionStatus`, and the Firestore workspace-update rule is
+tightened to `affectedKeys().hasOnly(['name','settings'])` so a workspace admin
+literally cannot set `plan: "pro"` or forge a subscription status from the client
+— closing a hole the previous `ownerId`-unchanged rule left open. `applySubscriptionState`
+maps any subscription event to "write the derived plan", which is idempotent, so
+replayed/out-of-order deliveries are safe.
+
+Stripe env vars are **optional** (`isStripeConfigured()`): with them unset the app
+runs on Free and the Billing screen shows an unconfigured state — same graceful
+degradation as AI without `ANTHROPIC_API_KEY`, so nothing else breaks in dev/CI.
+
+`past_due` keeps Pro rather than downgrading instantly, giving Stripe dunning a
+window before access is pulled. Plan limits (Free = 1 brand / 3 seats) and the Pro
+price are **placeholders** in `services/plans.ts` — deliberately in one pure file
+so tuning them (and the matching Stripe Price) is trivial; enforced at the two
+real chokepoints (brand-create, invite), not just hidden in the UI.

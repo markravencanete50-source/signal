@@ -4,6 +4,30 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 8 — Stripe billing
+
+**Added**
+
+- **Plans + gating** (`services/plans.ts`, pure, unit-tested): Free (1 brand, 3
+  seats) and Pro (unlimited), with the limits in one place so a tier is a one-line
+  change. Enforced server-side in the brand-create and invite actions — a Free
+  workspace is blocked from a 2nd brand or a 4th seat with an upgrade prompt.
+- **Stripe integration** (`lib/stripe.ts` — the only file importing the SDK,
+  lazy + config-gated like `lib/claude`; `lib/billing.ts` the business layer).
+  Subscription Checkout and the customer Portal via admin-only server actions
+  (card details entered on Stripe, never in-app). Signature-verified
+  `/api/webhooks/stripe` syncs `checkout.session.completed` and subscription
+  lifecycle events to the workspace's plan/status via the Admin SDK — idempotent.
+- **Billing settings** (Settings → Billing): current plan, usage vs limits, and
+  Upgrade / Manage buttons; degrades to an "unconfigured" state when the Stripe
+  keys are unset (billing is optional, mirroring how AI degrades without a key).
+- Workspace gains billing fields (`stripeCustomerId`, `stripeSubscriptionId`,
+  `subscriptionStatus`, `currentPeriodEnd`). **Security:** the workspace update
+  rule now locks every billing field — a client-side update may touch only `name`
+  and `settings`, so an admin can't self-upgrade to Pro or forge a subscription
+  status; all billing writes go through the webhook (Admin SDK). Verified by rules
+  tests (53 total).
+
 ### Phase 7 — Production hardening
 
 **Added**

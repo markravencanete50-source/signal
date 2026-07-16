@@ -52,7 +52,12 @@ beforeEach(async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
 
-    await db.doc(`workspaces/${WS_A}`).set({ name: "Alpha Agency", ownerId: OWNER_A });
+    await db.doc(`workspaces/${WS_A}`).set({
+      name: "Alpha Agency",
+      ownerId: OWNER_A,
+      plan: "free",
+      settings: { aiQuota: 1000 },
+    });
     await db.doc(`workspaces/${WS_A}/members/${OWNER_A}`).set({ uid: OWNER_A, role: "owner" });
     await db.doc(`workspaces/${WS_A}/members/${EDITOR_A}`).set({ uid: EDITOR_A, role: "editor" });
     await db.doc(`workspaces/${WS_A}/members/${CLIENT_A}`).set({ uid: CLIENT_A, role: "client" });
@@ -257,6 +262,28 @@ describe("competitors — public-data tracking", () => {
       asOwnerA()
         .doc("competitors/comp_a/snapshots/2026-07-18")
         .set({ date: "2026-07-18", followers: 1 }),
+    );
+  });
+});
+
+describe("workspace billing fields — server-write-only", () => {
+  it("lets an owner rename the workspace", async () => {
+    await assertSucceeds(asOwnerA().doc(`workspaces/${WS_A}`).update({ name: "Renamed" }));
+  });
+
+  it("denies a self-upgrade to Pro from the client", async () => {
+    await assertFails(asOwnerA().doc(`workspaces/${WS_A}`).update({ plan: "pro" }));
+  });
+
+  it("denies forging a Stripe customer id", async () => {
+    await assertFails(
+      asOwnerA().doc(`workspaces/${WS_A}`).update({ stripeCustomerId: "cus_forged" }),
+    );
+  });
+
+  it("denies forging a subscription status", async () => {
+    await assertFails(
+      asOwnerA().doc(`workspaces/${WS_A}`).update({ subscriptionStatus: "active" }),
     );
   });
 });

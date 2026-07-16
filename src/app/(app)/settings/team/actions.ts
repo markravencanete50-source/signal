@@ -5,10 +5,11 @@ import { z } from "zod";
 
 import { InviteEmail } from "@/emails/invite";
 import { getCurrentUser, requireAdmin } from "@/lib/auth/dal";
-import { createInvite, revokeInvite } from "@/lib/db/invites";
+import { createInvite, listPendingInvites, revokeInvite } from "@/lib/db/invites";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/resend";
-import { getWorkspace, removeMember, updateMemberRole } from "@/lib/db/workspaces";
+import { getWorkspace, listTeamMembers, removeMember, updateMemberRole } from "@/lib/db/workspaces";
+import { canAddSeat, planFor } from "@/services/plans";
 import { revokeAllSessions } from "@/lib/auth/session";
 import { adminAuth } from "@/lib/firebase-admin";
 
@@ -42,8 +43,22 @@ export async function inviteMember(_prev: TeamState, formData: FormData): Promis
 
   try {
     await requireAdmin(workspaceId);
-    const [inviter, workspace] = await Promise.all([getCurrentUser(), getWorkspace(workspaceId)]);
+    const [inviter, workspace, members, pending] = await Promise.all([
+      getCurrentUser(),
+      getWorkspace(workspaceId),
+      listTeamMembers(workspaceId),
+      listPendingInvites(workspaceId),
+    ]);
     if (!workspace) return { error: "Workspace not found." };
+
+    // Plan gate: a seat is a current member OR a live invite. Enforced here, not
+    // just hidden in the UI.
+    const usedSeats = members.length + pending.length;
+    if (!canAddSeat(workspace.plan, usedSeats)) {
+      return {
+        error: `Your ${planFor(workspace.plan).name} plan includes ${planFor(workspace.plan).maxSeats} seats. Upgrade to invite more people.`,
+      };
+    }
 
     const invite = await createInvite({
       workspaceId,

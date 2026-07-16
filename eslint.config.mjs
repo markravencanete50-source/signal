@@ -9,6 +9,21 @@ const eslintConfig = defineConfig([
 
   {
     /**
+     * Honour the `_`-prefix convention the codebase already uses to mark an
+     * intentionally-unused binding — most commonly the `_prev` state argument of
+     * a server action that only reads `formData` (or neither). Without this,
+     * `useActionState`-shaped actions that use neither argument trip the rule.
+     */
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+    },
+  },
+
+  {
+    /**
      * Services and adapters are the typed core of the app: services are pure
      * functions over domain data, adapters are the only code allowed to touch a
      * platform SDK. The build spec forbids `any` in both — an untyped Graph API

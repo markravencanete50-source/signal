@@ -10,6 +10,7 @@ const TABS = [
   { href: "/settings/connections", label: "Connections" },
   { href: "/settings/team", label: "Team" },
   { href: "/settings/brands", label: "Brands" },
+  { href: "/settings/billing", label: "Billing" },
 ];
 
 export function SettingsTabs() {

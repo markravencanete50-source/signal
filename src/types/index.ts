@@ -91,13 +91,32 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   },
 };
 
+export type PlanId = "free" | "pro";
+
+/** Mirrors Stripe's subscription statuses (the ones we act on). */
+export type SubscriptionStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired"
+  | "unpaid"
+  | "paused";
+
 export interface Workspace {
   id: string;
   name: string;
   ownerId: string;
-  plan: "free" | "pro";
+  plan: PlanId;
   settings: WorkspaceSettings;
   createdAt: string;
+  // --- Billing (server-written via the Stripe webhook; locked in rules) ---
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  subscriptionStatus?: SubscriptionStatus;
+  /** ISO end of the current paid period, for the billing UI. */
+  currentPeriodEnd?: string;
 }
 
 export interface Member {

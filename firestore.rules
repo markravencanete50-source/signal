@@ -148,8 +148,13 @@ service cloud.firestore {
       // because canAdmin() reads that very member doc, which does not exist yet.
       // A client-side create path would strand the workspace with no members.
       allow create: if false;
+      // Admins may edit only the name and settings from the client. Everything
+      // else — ownerId, plan, and every stripe* / subscription billing field — is
+      // server-written (the Stripe webhook via the Admin SDK) and locked here, so
+      // a client can't self-upgrade to Pro or forge a subscription status.
       allow update: if canAdmin(wsId)
-                    && request.resource.data.ownerId == resource.data.ownerId;
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['name', 'settings']);
       // Deleting a workspace cascades across tenants — server-side only.
       allow delete: if false;
 

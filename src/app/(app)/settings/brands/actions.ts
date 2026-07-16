@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin, requireBrandAccess } from "@/lib/auth/dal";
-import { createBrand, deleteBrand, updateBrand } from "@/lib/db/brands";
+import { createBrand, deleteBrand, listBrands, updateBrand } from "@/lib/db/brands";
+import { getWorkspace } from "@/lib/db/workspaces";
+import { canAddBrand, planFor } from "@/services/plans";
 import { ADMIN_ROLES } from "@/types";
 
 export type BrandState = { error?: string; success?: string };
@@ -30,6 +32,22 @@ export async function addBrand(_prev: BrandState, formData: FormData): Promise<B
 
   try {
     await requireAdmin(parsed.data.workspaceId);
+
+    // Plan gate: the Free tier caps brands. Checked server-side — the button may
+    // be hidden in the UI, but the limit is enforced here where it counts.
+    const [workspace, brands] = await Promise.all([
+      getWorkspace(parsed.data.workspaceId),
+      listBrands(parsed.data.workspaceId),
+    ]);
+    const plan = workspace?.plan ?? "free";
+    if (!canAddBrand(plan, brands.length)) {
+      return {
+        error: `Your ${planFor(plan).name} plan includes ${planFor(plan).maxBrands} brand${
+          planFor(plan).maxBrands === 1 ? "" : "s"
+        }. Upgrade to add more.`,
+      };
+    }
+
     await createBrand(parsed.data);
     revalidatePath("/settings/brands");
     return { success: `${parsed.data.name} added.` };
