@@ -252,28 +252,16 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // autolists / smartlinks / reports
+    // autolists — evergreen queues are ordinary workspace content (no bearer
+    // token), managed by the team. Reads are member-scoped; writes go through
+    // server actions, but a client-side toggle is a legitimate write too.
     //
-    // NOTE: public consumption of smartlinks (/{slug}) and reports (/r/{token})
-    // is served server-side via the Admin SDK — hence no public read here. A
-    // public read rule would leak every report in the collection to anyone able
-    // to guess a document id.
+    // NOTE: smartlinks and reports are NOT here — they carry public bearer
+    // tokens and are deny-all (see their blocks above). A member-read rule would
+    // let anyone in the workspace enumerate those tokens, and a member-write rule
+    // would let them inflate SmartLink click counters. All access is Admin-SDK.
     // ---------------------------------------------------------------------
     match /autolists/{id} {
-      allow read: if isMember(resource.data.workspaceId);
-      allow create: if canWrite(request.resource.data.workspaceId);
-      allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();
-      allow delete: if canWrite(resource.data.workspaceId);
-    }
-
-    match /smartlinks/{id} {
-      allow read: if isMember(resource.data.workspaceId);
-      allow create: if canWrite(request.resource.data.workspaceId);
-      allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();
-      allow delete: if canWrite(resource.data.workspaceId);
-    }
-
-    match /reports/{reportId} {
       allow read: if isMember(resource.data.workspaceId);
       allow create: if canWrite(request.resource.data.workspaceId);
       allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();

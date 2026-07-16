@@ -9,6 +9,7 @@ import type {
   DateRange,
   InboxRaw,
   PlatformAdapter,
+  PublicProfileSnapshot,
   PublishResult,
   RawDaily,
   RawMetrics,
@@ -403,6 +404,62 @@ export const instagramAdapter: PlatformAdapter = {
       method: "POST",
       params: { message },
     });
+  },
+
+  /**
+   * Public snapshot via IG Business Discovery — the sanctioned way to read
+   * another business/creator account's public data using our own IG user id.
+   * Returns null for private/personal handles (Discovery refuses them) or any
+   * lookup error, so a bad handle never breaks the competitors sync.
+   */
+  async fetchPublicProfile(
+    conn: Connection,
+    accessToken: string,
+    handle: string,
+  ): Promise<PublicProfileSnapshot | null> {
+    const igUserId = conn.igUserId;
+    if (!igUserId) return null;
+    const username = handle.replace(/^@/, "");
+
+    try {
+      const res = await graphFetch<{
+        business_discovery?: {
+          username: string;
+          name?: string;
+          followers_count: number;
+          media_count: number;
+          media?: { data: Array<{ like_count?: number; comments_count?: number }> };
+        };
+      }>(`/${igUserId}`, {
+        accessToken,
+        params: {
+          fields: `business_discovery.username(${username}){username,name,followers_count,media_count,media.limit(12){like_count,comments_count,timestamp}}`,
+        },
+      });
+
+      const bd = res.business_discovery;
+      if (!bd) return null;
+
+      const posts = bd.media?.data ?? [];
+      const avgEngagementRate =
+        posts.length && bd.followers_count > 0
+          ? posts.reduce((s, m) => s + (m.like_count ?? 0) + (m.comments_count ?? 0), 0) /
+            posts.length /
+            bd.followers_count
+          : 0;
+
+      return {
+        handle: `@${bd.username}`,
+        displayName: bd.name ?? bd.username,
+        followers: bd.followers_count,
+        // media_count is lifetime; recent-post count needs the timestamps, which
+        // Discovery only returns for the sampled window — approximate with the sample.
+        postsLast30d: posts.length,
+        avgEngagementRate,
+      };
+    } catch {
+      return null;
+    }
   },
 
   validateMedia(asset: ValidatableAsset): ValidationResult {

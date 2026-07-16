@@ -32,6 +32,16 @@ export async function upsertDaily(d: MetricsDaily): Promise<void> {
 }
 
 /** A brand's recent post metrics, newest first — analytics table + baselines. */
+/**
+ * The best intent score recorded for a post across its platforms, or null if it
+ * hasn't been synced yet. Used by the autolist auto-retire check.
+ */
+export async function getPostIntentScore(postId: string): Promise<number | null> {
+  const snap = await adminDb().collection(POST_METRICS).where("postId", "==", postId).get();
+  if (snap.empty) return null;
+  return Math.max(...snap.docs.map((d) => (d.data() as PostMetrics).intentScore));
+}
+
 export async function listPostMetrics(brandId: string, limit = 60): Promise<PostMetrics[]> {
   const snap = await adminDb()
     .collection(POST_METRICS)

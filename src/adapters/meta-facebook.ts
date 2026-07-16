@@ -9,6 +9,7 @@ import type {
   DateRange,
   InboxRaw,
   PlatformAdapter,
+  PublicProfileSnapshot,
   PublishResult,
   RawDaily,
   RawMetrics,
@@ -296,6 +297,16 @@ export const facebookAdapter: PlatformAdapter = {
       method: "POST",
       params: { message },
     });
+  },
+
+  /**
+   * Facebook has no public equivalent of IG Business Discovery — a Page's
+   * follower/engagement data isn't readable for accounts we don't manage — so
+   * competitor tracking is Instagram-only. Returning null (rather than throwing)
+   * lets the competitors engine simply skip FB-platform competitors.
+   */
+  async fetchPublicProfile(): Promise<PublicProfileSnapshot | null> {
+    return null;
   },
 
   validateMedia(asset: ValidatableAsset): ValidationResult {

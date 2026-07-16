@@ -4,6 +4,38 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 6 — Inbox, Autolists, Competitors
+
+**Added**
+
+- **Inbox**: unified comments + mentions across FB + IG, sentiment-sorted, with
+  filter chips (All / Leads / Needs care). AI-drafted replies grounded in the
+  brand's own recent captions (`lib/ai/reply.ts`, `/api/ai/reply`), each shipping
+  its one-line reasoning. Replies post back through the adapter using the brand's
+  decrypted connection token (the only Graph touchpoint); assign / archive status
+  actions. Sidebar Inbox badge now live (open count for the active brand).
+- **Autolists**: evergreen queues + RSS-to-social (`lib/db/autolists.ts`,
+  `lib/autolist-engine.ts`, `/api/cron/autolists`, hourly). Evergreen cycles a
+  queue on a day cadence and **auto-retires** any item that scored below its
+  intent threshold last cycle — flagging it for a Studio rework instead of blindly
+  re-posting. RSS pulls new entries, rewrites each per platform with Claude, and
+  queues them as drafts. Claim-under-transaction lock makes the run idempotent;
+  pure scheduling/selection logic is unit-tested (`services/autolist.ts`).
+- **Competitors**: tracked profiles with daily public-data snapshots
+  (`lib/db/competitors.ts`, `lib/competitor-engine.ts`, `/api/cron/competitors`).
+  New adapter method `fetchPublicProfile` — IG via Business Discovery, mock
+  deterministic, FB unsupported (returns null). Comparison table (you vs tracked:
+  followers, 30d growth, posts/wk, engagement) with a grounded AI insight loaded
+  client-side (`lib/ai/competitor-insight.ts`, `/api/ai/competitor-insight`).
+
+**Security fix**
+
+- Removed duplicate `reports` / `smartlinks` Firestore rule blocks that granted
+  member read + write. Firestore ORs duplicate `match` statements, so those
+  silently overrode the Phase 5 deny-all — any workspace member could read every
+  report/SmartLink public token and inflate click counters. Both are now deny-all
+  (Admin-SDK only), as intended; rules tests cover it.
+
 ### Phase 5 — Approvals, Reports, SmartLink
 
 **Added**

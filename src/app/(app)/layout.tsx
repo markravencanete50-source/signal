@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { countPendingApprovals } from "@/lib/db/approvals";
 import { listConnectionsForWorkspace } from "@/lib/db/connections";
+import { countOpenInbox } from "@/lib/db/inbox";
 import { getAppContext } from "@/lib/workspace-context";
 
 /**
@@ -19,15 +20,17 @@ import { getAppContext } from "@/lib/workspace-context";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, workspace, role, brands, activeBrand } = await getAppContext();
 
-  const [connections, approvals] = await Promise.all([
+  const [connections, approvals, inbox] = await Promise.all([
     listConnectionsForWorkspace(workspace.id),
     countPendingApprovals(workspace.id),
+    // Inbox items are per-brand; badge the active brand's open count.
+    activeBrand ? countOpenInbox(activeBrand.id) : Promise.resolve(0),
   ]);
   const lastSyncAt = mostRecentSync(connections.map((c) => c.lastSyncAt));
 
-  // Approvals is live (Phase 5); Inbox lands in Phase 6. A zero renders no badge,
-  // so the nav stays honest rather than showing the preview's hardcoded counts.
-  const counts = { inbox: 0, approvals };
+  // Both live now. A zero renders no badge, so the nav stays honest rather than
+  // showing the preview's hardcoded counts.
+  const counts = { inbox, approvals };
 
   return (
     <div className="grid min-h-screen md:grid-cols-[236px_1fr]">

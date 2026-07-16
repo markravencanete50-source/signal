@@ -4,6 +4,7 @@ import type {
   DateRange,
   InboxRaw,
   PlatformAdapter,
+  PublicProfileSnapshot,
   PublishResult,
   RawDaily,
   RawMetrics,
@@ -278,6 +279,23 @@ export function createMockAdapter(platform: Platform): PlatformAdapter {
       if (rand(`reply:${externalCommentId}`) < 0.02) {
         throw new Error("Comment no longer exists (mock) — it may have been deleted.");
       }
+    },
+
+    async fetchPublicProfile(
+      _conn: Connection,
+      _accessToken: string,
+      handle: string,
+    ): Promise<PublicProfileSnapshot | null> {
+      await latency(`profile:${handle}`);
+      const key = `${platform}:${handle.toLowerCase()}`;
+      return {
+        handle,
+        displayName: handle.replace(/^@/, "").replace(/[._]/g, " "),
+        followers: randInt(`${key}:followers`, 3_000, 40_000),
+        postsLast30d: randInt(`${key}:posts`, 4, 30),
+        // 1%–9% engagement, stable per handle.
+        avgEngagementRate: randInt(`${key}:eng`, 10, 90) / 1000,
+      };
     },
 
     validateMedia(asset: ValidatableAsset): ValidationResult {

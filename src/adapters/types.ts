@@ -76,6 +76,21 @@ export interface InboxRaw {
   sentiment?: Sentiment;
 }
 
+/**
+ * A public-data snapshot of a competitor profile. Public metrics only — the
+ * numbers anyone can see on the profile — never anything that needs the
+ * competitor's own authorisation.
+ */
+export interface PublicProfileSnapshot {
+  handle: string;
+  displayName: string;
+  followers: number;
+  /** Posts published in the trailing 30 days, if derivable. */
+  postsLast30d: number;
+  /** Average engagement rate over recent posts, 0–1. */
+  avgEngagementRate: number;
+}
+
 export interface ValidationResult {
   ok: boolean;
   /** Blocking problems. A non-empty list must prevent publishing. */
@@ -117,6 +132,17 @@ export interface PlatformAdapter {
   ): Promise<RawDaily[]>;
 
   fetchComments(conn: Connection, accessToken: string, since: Date): Promise<InboxRaw[]>;
+
+  /**
+   * Public snapshot of another account by handle, using the connected account's
+   * token to query (e.g. IG Business Discovery). Returns null when the platform
+   * can't surface public data for that handle. Public data only.
+   */
+  fetchPublicProfile(
+    conn: Connection,
+    accessToken: string,
+    handle: string,
+  ): Promise<PublicProfileSnapshot | null>;
 
   replyToComment(
     conn: Connection,

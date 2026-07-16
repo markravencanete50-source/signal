@@ -43,6 +43,25 @@ export async function upsertInboxItem(
   return true;
 }
 
+export async function getInboxItem(id: string): Promise<InboxItem | null> {
+  const snap = await adminDb().doc(`${COLLECTION}/${id}`).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() } as InboxItem;
+}
+
+/** Set an item's handling status (assign / archive / replied). */
+export async function setInboxStatus(
+  id: string,
+  status: InboxItem["status"],
+  assignedTo?: string,
+): Promise<void> {
+  const patch: Partial<InboxItem> = { status };
+  if (assignedTo !== undefined) patch.assignedTo = assignedTo;
+  await adminDb()
+    .doc(`${COLLECTION}/${id}`)
+    .update({ ...patch });
+}
+
 export async function listInbox(brandId: string, limit = 100): Promise<InboxItem[]> {
   const snap = await adminDb()
     .collection(COLLECTION)

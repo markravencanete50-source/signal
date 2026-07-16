@@ -97,6 +97,23 @@ beforeEach(async () => {
       clicks: 7,
     });
 
+    await db.doc(`autolists/al_a`).set({
+      workspaceId: WS_A,
+      brandId: "brand_a",
+      name: "Evergreen tips",
+      enabled: true,
+    });
+
+    await db.doc(`competitors/comp_a`).set({
+      workspaceId: WS_A,
+      brandId: "brand_a",
+      handle: "@rival",
+    });
+    await db.doc(`competitors/comp_a/snapshots/2026-07-17`).set({
+      date: "2026-07-17",
+      followers: 1000,
+    });
+
     await db.doc(`posts/post_pending`).set({
       workspaceId: WS_A,
       brandId: "brand_a",
@@ -189,6 +206,40 @@ describe("smartlinks — public link-in-bio", () => {
   it("denies reading or writing click attribution", async () => {
     await assertFails(asOwnerA().doc("smartlinkClicks/post_pending").get());
     await assertFails(asOwnerA().doc("smartlinkClicks/post_pending").update({ clicks: 999 }));
+  });
+});
+
+describe("autolists — workspace content", () => {
+  it("lets a member read their workspace's autolist", async () => {
+    await assertSucceeds(asOwnerA().doc("autolists/al_a").get());
+  });
+
+  it("denies reading another workspace's autolist", async () => {
+    await assertFails(asOwnerB().doc("autolists/al_a").get());
+  });
+
+  it("denies a client (read-only) creating an autolist", async () => {
+    await assertFails(
+      asClientA().doc("autolists/forged").set({ workspaceId: WS_A, brandId: "brand_a" }),
+    );
+  });
+});
+
+describe("competitors — public-data tracking", () => {
+  it("lets a member read a tracked competitor", async () => {
+    await assertSucceeds(asOwnerA().doc("competitors/comp_a").get());
+  });
+
+  it("denies cross-workspace reads", async () => {
+    await assertFails(asOwnerB().doc("competitors/comp_a").get());
+  });
+
+  it("denies client writes to snapshots (cron-only)", async () => {
+    await assertFails(
+      asOwnerA()
+        .doc("competitors/comp_a/snapshots/2026-07-18")
+        .set({ date: "2026-07-18", followers: 1 }),
+    );
   });
 });
 

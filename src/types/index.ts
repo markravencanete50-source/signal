@@ -312,6 +312,87 @@ export interface ReportDigest {
 }
 
 // ---------------------------------------------------------------------------
+// competitors
+// ---------------------------------------------------------------------------
+
+/** A daily public-data reading of a competitor, one doc per date (idempotent). */
+export interface CompetitorSnapshot {
+  date: string; // YYYY-MM-DD
+  followers: number;
+  postsLast30d: number;
+  avgEngagementRate: number; // 0–1
+}
+
+/**
+ * A tracked competitor profile. Public data only. The latest snapshot and 30-day
+ * follower growth are denormalised onto the doc so the comparison table renders
+ * without reading every snapshot; the full series lives in the `snapshots`
+ * subcollection (cron-written).
+ */
+export interface Competitor {
+  id: string;
+  workspaceId: string;
+  brandId: string;
+  platform: Platform;
+  handle: string;
+  displayName: string;
+  addedBy: string;
+  createdAt: string;
+  latest?: CompetitorSnapshot;
+  /** Follower change vs ~30 days ago, or null if there isn't enough history. */
+  growth30dPct: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// autolists
+// ---------------------------------------------------------------------------
+
+export type AutolistType = "evergreen" | "rss";
+
+/** One evergreen post template in the queue. */
+export interface AutolistItem {
+  id: string;
+  caption: string;
+  mediaAssetIds: string[];
+  /** The post created on this item's last publish, so we can read its score. */
+  lastPostId?: string;
+  lastIntentScore?: number;
+  /** Retired items are skipped and flagged for a Studio rework. */
+  retired?: boolean;
+  retiredReason?: string;
+}
+
+/**
+ * An autolist — an evergreen queue that keeps publishing, or an RSS feed that
+ * fills the queue automatically. Unlike blind recyclers, an evergreen autolist
+ * auto-retires anything that scored below `retireBelowIntent` last cycle.
+ */
+export interface Autolist {
+  id: string;
+  workspaceId: string;
+  brandId: string;
+  name: string;
+  type: AutolistType;
+  enabled: boolean;
+  platforms: Platform[];
+  /** Repeat cadence in days (3 = every 3 days, 7 = weekly). */
+  cadenceDays: number;
+  nextRunAt: string;
+  lastRunAt?: string;
+  /** Evergreen: the rotating queue + the read cursor. */
+  items: AutolistItem[];
+  cursor: number;
+  /** Evergreen auto-retire threshold; null disables it. */
+  retireBelowIntent: number | null;
+  /** RSS: the feed URL and the links already ingested (dedup). */
+  rssUrl?: string;
+  seenLinks?: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // smartlink
 // ---------------------------------------------------------------------------
 

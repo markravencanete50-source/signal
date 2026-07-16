@@ -297,3 +297,36 @@ query param, so the endpoint can't be coerced into an open redirect. Post
 attribution rides a `?ref={postId}` param that `recordClick` validates against the
 SmartLink's own workspace before crediting, so a forged ref can't write into
 another tenant's attribution.
+
+## 018 — Autolists auto-retire on real score; RSS queues drafts, evergreen publishes
+
+**Date:** 2026-07-17 · **Phase:** 6 · **Status:** accepted
+
+An autolist's promise is that it _won't_ blindly recycle. So an evergreen item
+carries the id of the post it last produced; on the next cycle the engine reads
+that post's real synced intent score and, if it's below the list's threshold,
+retires the item (flagged for a Studio rework) rather than re-posting it. An item
+with no score yet is never retired on a guess.
+
+Evergreen items publish automatically (they're the brand's own approved content);
+RSS entries are queued as **drafts**, not auto-published — third-party content
+gets a human check, and Claude rewrites each entry per platform. Due autolists are
+claimed under a transaction that advances `nextRunAt` before any post is created,
+so overlapping cron ticks can't double-publish. Pure scheduling/selection lives in
+`services/autolist.ts` and is unit-tested; the engine only does I/O.
+
+## 019 — Competitor tracking is Instagram-only, via Business Discovery
+
+**Date:** 2026-07-17 · **Phase:** 6 · **Status:** accepted
+
+"Public data only" has a hard platform limit: Instagram exposes another business/
+creator account's public numbers through Business Discovery (queried with our own
+IG user id), but Facebook has no public equivalent for Pages we don't manage. So
+`fetchPublicProfile` is real on the IG adapter, returns null on the FB adapter,
+and is deterministic in the mock — and the competitor engine simply skips any
+competitor whose platform isn't connected for that brand rather than inventing
+numbers. Snapshots are stored per date (idempotent) in a `snapshots` subcollection;
+the latest reading + 30-day growth are denormalised onto the parent so the table
+renders in one read. The comparison insight is client-loaded so the table never
+blocks on a Claude call, and both the table and the insight read the same
+`buildCompetitorRows` so their numbers can't disagree.
