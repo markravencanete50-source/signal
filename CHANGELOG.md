@@ -4,6 +4,23 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 10 — Global search
+
+**Added**
+
+- **Global search** — the topbar box is live (it had been a disabled placeholder).
+  Pure ranker (`services/search.ts`, unit-tested): prefix > word-start > substring,
+  title weighted over subtitle over keywords. Server-only gatherer (`lib/search.ts`)
+  fetches a bounded, workspace-scoped set of brands, posts, media and reports,
+  normalises them to one shape and ranks in memory — no external search service
+  (the stack is locked; an agency's dataset is small enough). `GET /api/search?q=`
+  is session+workspace scoped, so results are always the caller's own tenant.
+- Topbar `GlobalSearch` client component: debounced fetch (AbortController drops
+  stale responses), grouped dropdown (Brands / Posts / Media / Reports), full
+  keyboard nav (↑/↓/Enter/Esc). Selecting a brand-scoped result switches the
+  active brand before navigating, so a hit in another brand lands you correctly.
+  Added `listPostsForWorkspace` to the posts repo.
+
 ### Phase 9 — Notifications & audit UI
 
 **Added**

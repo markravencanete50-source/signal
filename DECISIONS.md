@@ -413,3 +413,19 @@ the action it records — an audit trail is a safety net, not a critical path.
 Actors are the Signal user for manual actions, or a system label ("Stripe",
 "Meta") for automated ones (webhook, deauthorize callback); `plan.changed` logs
 only on a real tier transition, not on every `subscription.updated` delivery.
+
+## 025 — Global search: in-memory rank over a bounded set, no search service
+
+**Date:** 2026-07-17 · **Phase:** 10 · **Status:** accepted
+
+Firestore has no full-text search and the stack is locked (no Algolia/Typesense).
+An agency's dataset is small, so search fetches a bounded, workspace-scoped set
+(brands, posts ≤300, media, reports) and ranks it in memory with a pure scorer
+(`services/search.ts`): prefix > word-start > substring, title weighted above
+subtitle above keywords. The gather is `getAppContext()`-scoped, so a query can
+only ever surface the caller's own tenant. This trades completeness at extreme
+scale (a workspace with >300 posts won't search the tail) for zero new
+infrastructure and instant relevance — acceptable for the target user, and the
+cap is a one-line change if it ever bites. Brand/post/media results carry a
+`brandId` so the client switches the active brand before navigating (those views
+are brand-scoped), making a cross-brand hit land in the right place.

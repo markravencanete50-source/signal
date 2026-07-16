@@ -1,8 +1,8 @@
-import { SearchIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { Brand, Notification, Role, User } from "@/types";
 
 import { BrandSwitcher } from "./brand-switcher";
+import { GlobalSearch } from "./global-search";
 import { NotificationsBell } from "./notifications-bell";
 import { UserMenu } from "./user-menu";
 
@@ -42,15 +42,7 @@ export function Topbar({
         />
       )}
 
-      <div className="bg-surface-2 text-text-2 hidden max-w-[320px] flex-1 items-center gap-2 rounded-[10px] px-3 py-2 md:flex">
-        <SearchIcon className="size-[15px] shrink-0" />
-        <input
-          placeholder="Search posts, media, reports…"
-          className="placeholder:text-text-2 flex-1 border-none bg-transparent text-[0.86rem] outline-none"
-          // Wired up in a later phase — search needs posts and media to exist first.
-          disabled
-        />
-      </div>
+      <GlobalSearch />
 
       <SyncStatus lastSyncAt={lastSyncAt} />
 

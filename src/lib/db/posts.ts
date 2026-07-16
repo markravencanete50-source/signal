@@ -99,6 +99,16 @@ export async function listPostsInRange(
   return scheduled.docs.map((d) => docToPost(d.id, d.data()));
 }
 
+/** A bounded set of a workspace's posts across all brands — the search index. */
+export async function listPostsForWorkspace(workspaceId: string, max = 300): Promise<Post[]> {
+  const snap = await adminDb()
+    .collection(COLLECTION)
+    .where("workspaceId", "==", workspaceId)
+    .limit(max)
+    .get();
+  return snap.docs.map((d) => docToPost(d.id, d.data()));
+}
+
 export async function listPostsByStatus(workspaceId: string, status: PostStatus): Promise<Post[]> {
   const snap = await adminDb()
     .collection(COLLECTION)
