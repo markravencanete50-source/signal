@@ -86,7 +86,11 @@ export function env(): ServerEnv {
  *
  * Read directly rather than through `env()` so the whole app stays demoable
  * before Meta App Review clears, without every other secret being present.
+ *
+ * Named `isMockMode`, NOT `useMockAdapters`: a `use` prefix makes ESLint's
+ * rules-of-hooks treat a plain function as a React hook and reject it in async
+ * server components and non-component functions.
  */
-export function useMockAdapters(): boolean {
+export function isMockMode(): boolean {
   return process.env.USE_MOCK_ADAPTERS !== "false";
 }

@@ -4,6 +4,51 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Phase 1 — Auth, tenancy, shell
+
+**Added**
+
+- **Auth**: Firebase session cookies (httpOnly, mint/verify/revoke), a React
+  `cache()`-memoised DAL (`verifySession`, `getRole`, `requireRole/Writer/Admin`,
+  `requireBrandAccess`), `proxy.ts` optimistic redirect, and login/signup
+  (email + Google) with a session-exchange route.
+- **Tenancy**: server-side atomic workspace+owner bootstrap, brand CRUD with
+  cascade delete, Resend magic-link invites (`invites` collection, bearer-token
+  security, email-ownership check on accept), full team management (invite,
+  role change, remove with session revocation).
+- **Shell**: 236px grouped sidebar, topbar (brand switcher, search, sync,
+  notifications, theme, avatar/account menu), responsive bottom nav + FAB +
+  More sheet — all matching the preview, role-filtered via one nav model.
+- **Adapters**: `PlatformAdapter` contract, registry, a deterministic
+  MockAdapter (realistic data + latency + failures), and real Meta FB/IG
+  adapters including the IG two-step container publish. Shared Graph client with
+  typed errors and long-lived token exchange.
+- **Meta OAuth**: HMAC-signed, browser-bound, single-use `state` (CSRF); callback
+  re-authorises the caller and stores an AES-256-GCM-encrypted token. Settings →
+  Connections with health cards (amber expiry warning) driven by
+  `toPublicConnection` (token never crosses to the client).
+- Onboarding, invite-accept, dashboard (honest empty states), settings
+  (connections/team/brands), and phase-stub pages for every nav route with
+  `requireTeamView` guards.
+- Invite email (React Email), crypto module (encrypt/decrypt/token/safeEqual),
+  repositories under `lib/db/`, and a workspace-context resolver.
+- 35 Firestore rules tests (was 31): added `invites` lockout and member-`uid`
+  forgery coverage.
+
+**Fixed**
+
+- A `"use server"` module may export only async functions — moved
+  `ACTIVE_BRAND_COOKIE` out of `brand-actions.ts` into `brand-cookie.ts`.
+- Renamed `useMockAdapters` → `isMockMode`; the `use` prefix tripped ESLint's
+  rules-of-hooks in async server components.
+
+**Changed**
+
+- Added `invites` collection (DECISIONS #012), `lib/db/` repository layer
+  (#010), pinned Graph API version (#011). Member docs now carry a `uid` field
+  (enforced == doc id in rules) so a user's workspaces resolve via a
+  collection-group query instead of scanning every tenant.
+
 ### Phase 0 — Foundation
 
 **Added**

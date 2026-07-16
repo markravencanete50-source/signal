@@ -1,0 +1,62 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+import { SESSION_COOKIE } from "@/lib/auth/session";
+
+/**
+ * Optimistic auth redirect. **Not** an authorisation boundary.
+ *
+ * (Next 16 renamed `middleware.ts` to `proxy.ts`; same functionality.)
+ *
+ * This runs on every request including prefetches, so it only checks whether a
+ * session cookie is *present* — it never verifies it and never touches
+ * Firestore. A forged cookie sails straight through here by design; the real
+ * check is `verifySession()` in the DAL, next to the data, plus Firestore rules
+ * underneath that.
+ *
+ * Its only job is UX: bounce obviously-signed-out users to /login instead of
+ * rendering a shell that will fail, and keep signed-in users off the login page.
+ */
+export function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+  const hasSessionCookie = request.cookies.has(SESSION_COOKIE);
+
+  const isAuthPage = pathname === "/login" || pathname === "/signup";
+
+  if (!hasSessionCookie && !isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    // Preserve where they were headed so login can return them there. Only the
+    // path+query is carried — never an absolute URL, which would make this an
+    // open redirect into an attacker's origin.
+    if (pathname !== "/") {
+      url.searchParams.set("next", `${pathname}${search}`);
+    }
+    return NextResponse.redirect(url);
+  }
+
+  if (hasSessionCookie && isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  /**
+   * Matches everything except Next internals, static assets, and the public
+   * surfaces that must work signed-out:
+   *   - /api/*    — route handlers authorise themselves (cron secret, webhook
+   *                 signature, session); a redirect here would break them
+   *   - /r/*      — white-label public reports, no auth by design
+   *   - /_next/*, favicon, images — static
+   *
+   * The trailing `[\\w-]+\\.\\w+` clause excludes any file-with-extension at the
+   * root, which is what keeps SmartLink's future `/{slug}` route matching while
+   * letting real files through.
+   */
+  matcher: ["/((?!api|r/|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)"],
+};

@@ -53,12 +53,12 @@ beforeEach(async () => {
     const db = ctx.firestore();
 
     await db.doc(`workspaces/${WS_A}`).set({ name: "Alpha Agency", ownerId: OWNER_A });
-    await db.doc(`workspaces/${WS_A}/members/${OWNER_A}`).set({ role: "owner" });
-    await db.doc(`workspaces/${WS_A}/members/${EDITOR_A}`).set({ role: "editor" });
-    await db.doc(`workspaces/${WS_A}/members/${CLIENT_A}`).set({ role: "client" });
+    await db.doc(`workspaces/${WS_A}/members/${OWNER_A}`).set({ uid: OWNER_A, role: "owner" });
+    await db.doc(`workspaces/${WS_A}/members/${EDITOR_A}`).set({ uid: EDITOR_A, role: "editor" });
+    await db.doc(`workspaces/${WS_A}/members/${CLIENT_A}`).set({ uid: CLIENT_A, role: "client" });
 
     await db.doc(`workspaces/${WS_B}`).set({ name: "Beta Agency", ownerId: OWNER_B });
-    await db.doc(`workspaces/${WS_B}/members/${OWNER_B}`).set({ role: "owner" });
+    await db.doc(`workspaces/${WS_B}/members/${OWNER_B}`).set({ uid: OWNER_B, role: "owner" });
 
     await db.doc(`brands/brand_a`).set({ workspaceId: WS_A, name: "House of Lettings" });
     await db.doc(`brands/brand_b`).set({ workspaceId: WS_B, name: "Someone Else" });
@@ -68,6 +68,13 @@ beforeEach(async () => {
       workspaceId: WS_A,
       platform: "fb",
       accessTokenEnc: "encrypted-blob",
+    });
+
+    await db.doc(`invites/invite_a`).set({
+      workspaceId: WS_A,
+      email: "invitee@example.com",
+      role: "editor",
+      token: "secret-bearer-token",
     });
 
     await db.doc(`posts/post_pending`).set({
@@ -115,6 +122,22 @@ describe("connections — platform tokens", () => {
 
   it("denies listing the collection", async () => {
     await assertFails(asOwnerA().collection("connections").get());
+  });
+});
+
+describe("invites — bearer tokens", () => {
+  it("denies an owner reading an invite (token would leak)", async () => {
+    await assertFails(asOwnerA().doc("invites/invite_a").get());
+  });
+
+  it("denies enumerating the invites collection", async () => {
+    await assertFails(asOwnerA().collection("invites").get());
+  });
+
+  it("denies writing an invite from the client", async () => {
+    await assertFails(
+      asOwnerA().doc("invites/forged").set({ workspaceId: WS_A, role: "owner", token: "mine" }),
+    );
   });
 });
 
@@ -219,7 +242,9 @@ describe("editor role", () => {
 
   it("denies managing members", async () => {
     await assertFails(
-      asEditorA().doc(`workspaces/${WS_A}/members/someone_new`).set({ role: "editor" }),
+      asEditorA()
+        .doc(`workspaces/${WS_A}/members/someone_new`)
+        .set({ uid: "someone_new", role: "editor" }),
     );
   });
 });
@@ -239,7 +264,17 @@ describe("privilege escalation", () => {
 
   it("allows an owner to invite a new member", async () => {
     await assertSucceeds(
-      asOwnerA().doc(`workspaces/${WS_A}/members/user_new`).set({ role: "editor" }),
+      asOwnerA()
+        .doc(`workspaces/${WS_A}/members/user_new`)
+        .set({ uid: "user_new", role: "editor" }),
+    );
+  });
+
+  it("denies a member doc whose uid field doesn't match its id", async () => {
+    // A forged uid would make this workspace appear in OWNER_B's collection-group
+    // lookup — i.e. inject a tenant into someone else's brand switcher.
+    await assertFails(
+      asOwnerA().doc(`workspaces/${WS_A}/members/user_new`).set({ uid: OWNER_B, role: "editor" }),
     );
   });
 

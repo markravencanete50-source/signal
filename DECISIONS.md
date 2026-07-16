@@ -148,3 +148,53 @@ reaches tenant data — while placing the check where it actually holds:
 
 Firestore rules are the third, independent layer: even a bug in the DAL cannot
 let workspace A read workspace B from the client.
+
+## 010 — Firestore repositories live in `lib/db/`, not `services/`
+
+**Date:** 2026-07-16 · **Phase:** 1 · **Status:** accepted
+
+The spec defines `services/` as "pure functions, no UI/HTTP" and lists `lib/` as
+infrastructure (firebase-admin, cloudinary, resend, claude, crypto, auth). That
+leaves Firestore reads and writes without a stated home: they are I/O, so they
+cannot go in `services/` without breaking the purity rule that keeps services
+testable with no emulator.
+
+Chosen: **`lib/db/<collection>.ts`** holds the repositories (all Admin SDK
+access, all document↔domain-type mapping). `services/` stays pure and receives
+plain data. Route handlers and server actions compose the two: repo reads →
+service computes → repo writes.
+
+This is what makes the intent-score, coherence and anomaly engines unit-testable
+as pure functions later, and keeps every privileged Admin SDK call in one
+auditable layer.
+
+## 011 — Meta Graph API version is pinned
+
+**Date:** 2026-07-16 · **Phase:** 1 · **Status:** accepted
+
+`GRAPH_VERSION = "v21.0"` in `adapters/meta-client.ts`. Unversioned Graph calls
+silently track the latest version, so Meta can change behaviour underneath a
+working deploy. Meta deprecates versions on roughly a 2-year cycle, so this
+needs a deliberate periodic bump — cheap and reviewable in one constant, versus
+debugging a publish that changed shape overnight.
+
+## 012 — `invites` collection added to the data model
+
+**Date:** 2026-07-16 · **Phase:** 1 · **Status:** accepted
+
+The spec's data model has no `invites` collection, but Phase 1 requires "member
+invites via Resend (magic link)". A magic link needs somewhere to store the
+token, the invited email, the target role and an expiry.
+
+Chosen: a top-level `invites/{id}` collection, **client-deny-all** in rules, same
+as `connections`. The token is a bearer credential — anyone holding the link gets
+the role — so it is treated like one:
+
+- 32 crypto-random bytes (`generatePublicToken()`), not a guessable id
+- single-use (`acceptedAt` pins it), 7-day expiry
+- **the accepting account must own the invited email address**, so a forwarded or
+  leaked link doesn't grant access on its own
+- readable only via the Admin SDK, looked up by token
+
+A client-readable version would let any member list live tokens and self-promote
+to owner, which is exactly the escalation the members rule prevents.

@@ -73,6 +73,18 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // invites — TOTAL CLIENT LOCKOUT
+    //
+    // Each invite holds a bearer token that grants a role in a workspace.
+    // A client-readable invite collection would let any member enumerate live
+    // tokens and promote themselves to owner, so all access goes through the
+    // Admin SDK, which looks up by token and never hands the collection out.
+    // ---------------------------------------------------------------------
+    match /invites/{inviteId} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------------
     // users — a user reads and edits only their own profile doc
     // ---------------------------------------------------------------------
     match /users/{uid} {
@@ -102,9 +114,14 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if isMember(wsId);
+        // `uid` duplicates the doc id so collection-group queries can find a
+        // user's workspaces (Firestore can't filter those by document id).
+        // Pinning them equal matters: a forged uid would inject this workspace
+        // into another user's brand switcher.
         // Self-escalation guard: only owner/admin change membership, and a
         // caller may never rewrite their own role.
         allow create, update: if canAdmin(wsId)
+                             && request.resource.data.uid == uid
                              && !(uid == request.auth.uid
                                   && request.resource.data.role != resource.data.role);
         allow delete: if canAdmin(wsId) && uid != request.auth.uid;
