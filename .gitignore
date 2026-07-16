@@ -30,8 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — secrets. NEVER commit .env.local.
+# The negation is load-bearing: `.env*` alone also swallows .env.example, which
+# is the documented env contract and MUST be committed.
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +42,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# firebase — emulator runtime artifacts and local CLI state
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+database-debug.log*
+ui-debug.log*
+pubsub-debug.log*
+*.local
+
+# Service account keys. Belt-and-braces: these must never be in the repo, and a
+# key committed to a public repo is compromised the moment it lands.
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+key.txt

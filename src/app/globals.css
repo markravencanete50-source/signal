@@ -1,26 +1,101 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/**
+ * Dark mode: class strategy, driven by next-themes toggling `.dark` on <html>.
+ * Tailwind v4 has no JS config, so `darkMode: 'class'` is expressed here.
+ * Colour tokens already flip via the `.dark` block in tokens.css, so `dark:`
+ * variants should only be needed for non-colour tweaks.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
 
+/**
+ * `@theme inline` emits utilities that reference var(--token) rather than
+ * copying its value at build time. That indirection is what lets a single
+ * `.dark` class swap every colour with no recompile and no dark: variant.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* surfaces */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+
+  /* type */
+  --color-text-1: var(--text-1);
+  --color-text-2: var(--text-2);
+
+  /* brand */
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+
+  /* status */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  /* charts */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+
+  /* type families — next/font injects these variables in layout.tsx */
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
+
+  /* elevation */
+  --shadow-card: var(--shadow);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  /**
+   * The preview sets a 15px root. Tailwind sizing is rem-based, so this scales
+   * the whole system to match the design 1:1. Do not "correct" this to 16px.
+   */
+  html {
+    font-size: 15px;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    transition:
+      background 0.25s,
+      color 0.25s;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+
+  /* Keyboard focus must stay visible everywhere — accessibility requirement. */
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--ring);
+    border-radius: 8px;
+  }
+
+  svg {
+    display: block;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }

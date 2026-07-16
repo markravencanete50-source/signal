@@ -1,64 +1,104 @@
-import Image from "next/image";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
+/**
+ * Phase 0 shell.
+ *
+ * Deliberately minimal: its job is to prove the foundation works — fonts load,
+ * every semantic token resolves, and one class on <html> repaints the whole
+ * palette. Phase 1 replaces this with the marketing landing page and moves the
+ * authed views under `(app)`.
+ */
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="bg-bg min-h-screen">
+      <header className="border-border bg-surface sticky top-0 z-40 flex h-[60px] items-center gap-3 border-b px-6">
+        <div className="flex items-center gap-[10px]">
+          <div className="bg-accent grid size-[30px] place-items-center rounded-[9px]">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--accent-fg)"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              className="size-4"
+              aria-hidden="true"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              <path d="M4 16l4-7 4 4 4-9 4 6" />
+            </svg>
+          </div>
+          <span className="font-display text-[1.15rem] font-bold tracking-[-0.02em]">Signal</span>
+        </div>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-[1180px] px-7 py-7">
+        <div className="mb-[22px]">
+          <h1 className="text-[1.5rem] font-bold tracking-[-0.02em]">Phase 0 — Foundation</h1>
+          <p className="text-text-2 mt-[3px] text-[0.88rem]">
+            Tokens, theming and tooling. Toggle the theme to verify every surface flips.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+
+        <section className="mb-[14px] grid grid-cols-2 gap-[14px] md:grid-cols-4">
+          {[
+            { label: "Followers", value: "12,840", delta: "▲ 2.1%", up: true },
+            { label: "Reach · 7 days", value: "48.2K", delta: "▼ 8.4%", up: false },
+            { label: "Intent score · avg", value: "71", delta: "▲ 5", up: true },
+            { label: "Niche coherence", value: "84", delta: "▲ 3", up: true },
+          ].map((m) => (
+            <div key={m.label} className="border-border bg-surface rounded-2xl border p-5">
+              <span className="text-text-2 mb-2 block text-[0.76rem] font-medium">{m.label}</span>
+              <span className="font-display text-[1.75rem] leading-none font-bold tracking-[-0.03em]">
+                {m.value}
+              </span>
+              <span
+                className={`mt-1.5 inline-flex items-center gap-[3px] text-[0.76rem] font-semibold ${
+                  m.up ? "text-success" : "text-danger"
+                }`}
+              >
+                {m.delta}
+              </span>
+            </div>
+          ))}
+        </section>
+
+        <section className="border-border bg-surface rounded-2xl border p-5">
+          <h3 className="mb-3 text-[0.95rem] font-semibold">Token check</h3>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ["accent", "bg-accent text-accent-fg"],
+              ["accent-soft", "bg-accent-soft text-accent"],
+              ["success-soft", "bg-success-soft text-success"],
+              ["warning-soft", "bg-warning-soft text-warning"],
+              ["danger-soft", "bg-danger-soft text-danger"],
+              ["surface-2", "bg-surface-2 text-text-2"],
+            ].map(([name, cls]) => (
+              <span
+                key={name}
+                className={`inline-flex items-center rounded-full px-[10px] py-1 text-[0.72rem] font-semibold ${cls}`}
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+          {/* Class names are written out in full — Tailwind scans source
+              statically, so an interpolated `bg-${c}` would never be generated. */}
+          <div className="mt-4 flex gap-2">
+            {[
+              ["chart-1", "bg-chart-1"],
+              ["chart-2", "bg-chart-2"],
+              ["chart-3", "bg-chart-3"],
+              ["chart-4", "bg-chart-4"],
+            ].map(([name, cls]) => (
+              <div key={name} className="flex-1">
+                <div className={`h-10 rounded-lg ${cls}`} />
+                <span className="text-text-2 mt-1.5 block text-[0.72rem]">{name}</span>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );

@@ -1,0 +1,257 @@
+rules_version = '2';
+
+/**
+ * Signal — Firestore security rules.
+ *
+ * Threat model: this is multi-tenant. A signed-in user of workspace A must not
+ * read or write ANY document belonging to workspace B, and platform access
+ * tokens must never be reachable from a browser at all.
+ *
+ * Model: flat top-level collections, each carrying a `workspaceId` field.
+ * Authorisation is therefore a field check against the caller's membership doc
+ * at workspaces/{wsId}/members/{uid}, not a path prefix.
+ *
+ * Roles: owner > admin > editor > client.
+ *   owner/admin — full read/write within the workspace
+ *   editor      — create/edit content; cannot manage members or delete the workspace
+ *   client      — READ-ONLY, and only approve/reject on posts. Never writes content.
+ *
+ * Anything not explicitly matched below is denied by default.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------------
+    // helpers
+    // ---------------------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(wsId) {
+      return /databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid);
+    }
+
+    function isMember(wsId) {
+      return signedIn() && exists(memberPath(wsId));
+    }
+
+    function role(wsId) {
+      return get(memberPath(wsId)).data.role;
+    }
+
+    function hasRole(wsId, roles) {
+      return isMember(wsId) && role(wsId) in roles;
+    }
+
+    // Writers of content. Explicitly excludes `client`.
+    function canWrite(wsId) {
+      return hasRole(wsId, ['owner', 'admin', 'editor']);
+    }
+
+    function canAdmin(wsId) {
+      return hasRole(wsId, ['owner', 'admin']);
+    }
+
+    // Guards against a caller moving a doc into another workspace, or forging
+    // the workspaceId on create to smuggle a doc into a tenant they can write.
+    function staysInWorkspace() {
+      return request.resource.data.workspaceId == resource.data.workspaceId;
+    }
+
+    // ---------------------------------------------------------------------
+    // connections — TOTAL CLIENT LOCKOUT
+    //
+    // These hold AES-256-GCM encrypted Meta access tokens. Nothing client-side
+    // has any business reading them, even an owner: the Admin SDK bypasses
+    // rules entirely, so every legitimate access already goes server-side.
+    // Deny-all is therefore free of cost and removes the whole attack surface.
+    // ---------------------------------------------------------------------
+    match /connections/{connId} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // users — a user reads and edits only their own profile doc
+    // ---------------------------------------------------------------------
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid;
+      // uid and email are identity, not preferences — pin them after create.
+      allow update: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.email == resource.data.email;
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // workspaces + members
+    // ---------------------------------------------------------------------
+    match /workspaces/{wsId} {
+      allow read: if isMember(wsId);
+      // Server-side only (Admin SDK). Creating a workspace must atomically also
+      // create the owner's member doc — and it cannot be done from the client,
+      // because canAdmin() reads that very member doc, which does not exist yet.
+      // A client-side create path would strand the workspace with no members.
+      allow create: if false;
+      allow update: if canAdmin(wsId)
+                    && request.resource.data.ownerId == resource.data.ownerId;
+      // Deleting a workspace cascades across tenants — server-side only.
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isMember(wsId);
+        // Self-escalation guard: only owner/admin change membership, and a
+        // caller may never rewrite their own role.
+        allow create, update: if canAdmin(wsId)
+                             && !(uid == request.auth.uid
+                                  && request.resource.data.role != resource.data.role);
+        allow delete: if canAdmin(wsId) && uid != request.auth.uid;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // brands
+    // ---------------------------------------------------------------------
+    match /brands/{brandId} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if canAdmin(request.resource.data.workspaceId);
+      allow update: if canAdmin(resource.data.workspaceId) && staysInWorkspace();
+      allow delete: if canAdmin(resource.data.workspaceId);
+    }
+
+    // ---------------------------------------------------------------------
+    // posts
+    //
+    // The one place `client` may write: flipping approval on a post awaiting
+    // their decision. Constrained so they can only touch the approval block and
+    // the resulting status — never the caption, schedule or media.
+    // ---------------------------------------------------------------------
+    match /posts/{postId} {
+      function touchedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function clientApprovalOnly() {
+        return hasRole(resource.data.workspaceId, ['client'])
+               && resource.data.status == 'pending_approval'
+               && touchedKeys().hasOnly(['approval', 'status'])
+               && request.resource.data.status in ['approved', 'draft'];
+      }
+
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if canWrite(request.resource.data.workspaceId);
+      allow update: if staysInWorkspace()
+                    && (canWrite(resource.data.workspaceId) || clientApprovalOnly());
+      allow delete: if canWrite(resource.data.workspaceId);
+    }
+
+    // ---------------------------------------------------------------------
+    // mediaAssets
+    // ---------------------------------------------------------------------
+    match /mediaAssets/{assetId} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if canWrite(request.resource.data.workspaceId);
+      allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();
+      allow delete: if canWrite(resource.data.workspaceId);
+    }
+
+    // ---------------------------------------------------------------------
+    // Derived analytics — written by the sync cron via Admin SDK only.
+    // Clients read; nobody writes from the browser.
+    // ---------------------------------------------------------------------
+    match /postMetrics/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow write: if false;
+    }
+
+    match /metricsDaily/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow write: if false;
+    }
+
+    match /anomalies/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow write: if false;
+    }
+
+    match /competitors/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create, update, delete: if canWrite(resource.data.workspaceId);
+
+      // Snapshots are cron-written.
+      match /snapshots/{date} {
+        allow read: if isMember(get(/databases/$(database)/documents/competitors/$(id)).data.workspaceId);
+        allow write: if false;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // inboxItems — replies go through the adapter server-side, but assignment
+    // and archiving are legitimate client-side writes for the team.
+    // ---------------------------------------------------------------------
+    match /inboxItems/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if false;
+      allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // autolists / smartlinks / reports
+    //
+    // NOTE: public consumption of smartlinks (/{slug}) and reports (/r/{token})
+    // is served server-side via the Admin SDK — hence no public read here. A
+    // public read rule would leak every report in the collection to anyone able
+    // to guess a document id.
+    // ---------------------------------------------------------------------
+    match /autolists/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if canWrite(request.resource.data.workspaceId);
+      allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();
+      allow delete: if canWrite(resource.data.workspaceId);
+    }
+
+    match /smartlinks/{id} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if canWrite(request.resource.data.workspaceId);
+      allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();
+      allow delete: if canWrite(resource.data.workspaceId);
+    }
+
+    match /reports/{reportId} {
+      allow read: if isMember(resource.data.workspaceId);
+      allow create: if canWrite(request.resource.data.workspaceId);
+      allow update: if canWrite(resource.data.workspaceId) && staysInWorkspace();
+      allow delete: if canWrite(resource.data.workspaceId);
+    }
+
+    // ---------------------------------------------------------------------
+    // notifications — addressed to a single user; only they may read/dismiss
+    // ---------------------------------------------------------------------
+    match /notifications/{id} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+      allow update: if signedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // auditLogs — append-only, and only from the server. Immutable by design:
+    // a tamperable audit log is worse than none.
+    // ---------------------------------------------------------------------
+    match /auditLogs/{id} {
+      allow read: if canAdmin(resource.data.workspaceId);
+      allow write: if false;
+    }
+
+    // featureFlags — server-managed, readable by any signed-in user.
+    match /featureFlags/{key} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+  }
+}

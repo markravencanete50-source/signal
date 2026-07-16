@@ -1,0 +1,10 @@
+.next
+node_modules
+out
+build
+coverage
+package-lock.json
+
+# Design source of truth — hand-authored, formatting it would churn the diff
+# and make preview-vs-code comparison harder.
+signal-preview-v2.html

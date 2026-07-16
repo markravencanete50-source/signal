@@ -1,0 +1,286 @@
+import {
+  assertFails,
+  assertSucceeds,
+  initializeTestEnvironment,
+  type RulesTestEnvironment,
+} from "@firebase/rules-unit-testing";
+import { readFileSync } from "node:fs";
+import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
+
+/**
+ * Firestore security rules tests.
+ *
+ * These are the last line of defence for tenant isolation, so they assert the
+ * things that would be catastrophic if wrong:
+ *   - platform tokens are unreachable from any client
+ *   - workspace A can never see workspace B
+ *   - the `client` role cannot write content or escalate itself
+ *
+ * Run: npm run test:rules   (boots the Firestore emulator via firebase CLI)
+ */
+
+const WS_A = "ws_alpha";
+const WS_B = "ws_beta";
+
+const OWNER_A = "user_owner_a";
+const EDITOR_A = "user_editor_a";
+const CLIENT_A = "user_client_a";
+const OWNER_B = "user_owner_b";
+
+let testEnv: RulesTestEnvironment;
+
+beforeAll(async () => {
+  testEnv = await initializeTestEnvironment({
+    projectId: "signal-test",
+    firestore: {
+      rules: readFileSync("firestore.rules", "utf8"),
+      host: "127.0.0.1",
+      port: 8080,
+    },
+  });
+});
+
+afterAll(async () => {
+  await testEnv.cleanup();
+});
+
+beforeEach(async () => {
+  await testEnv.clearFirestore();
+
+  // Seed via withSecurityRulesDisabled — this is the Admin SDK equivalent, and
+  // mirrors reality: memberships and connections are provisioned server-side.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+
+    await db.doc(`workspaces/${WS_A}`).set({ name: "Alpha Agency", ownerId: OWNER_A });
+    await db.doc(`workspaces/${WS_A}/members/${OWNER_A}`).set({ role: "owner" });
+    await db.doc(`workspaces/${WS_A}/members/${EDITOR_A}`).set({ role: "editor" });
+    await db.doc(`workspaces/${WS_A}/members/${CLIENT_A}`).set({ role: "client" });
+
+    await db.doc(`workspaces/${WS_B}`).set({ name: "Beta Agency", ownerId: OWNER_B });
+    await db.doc(`workspaces/${WS_B}/members/${OWNER_B}`).set({ role: "owner" });
+
+    await db.doc(`brands/brand_a`).set({ workspaceId: WS_A, name: "House of Lettings" });
+    await db.doc(`brands/brand_b`).set({ workspaceId: WS_B, name: "Someone Else" });
+
+    await db.doc(`connections/conn_a`).set({
+      brandId: "brand_a",
+      workspaceId: WS_A,
+      platform: "fb",
+      accessTokenEnc: "encrypted-blob",
+    });
+
+    await db.doc(`posts/post_pending`).set({
+      workspaceId: WS_A,
+      brandId: "brand_a",
+      status: "pending_approval",
+      variants: { facebook: { caption: "original caption" } },
+      approval: { required: true, requestedFrom: CLIENT_A },
+    });
+
+    await db.doc(`posts/post_b`).set({
+      workspaceId: WS_B,
+      brandId: "brand_b",
+      status: "draft",
+    });
+
+    await db.doc(`auditLogs/log_1`).set({ workspaceId: WS_A, action: "post.delete" });
+    await db.doc(`postMetrics/post_pending_facebook`).set({
+      workspaceId: WS_A,
+      brandId: "brand_a",
+      intentScore: 74,
+    });
+  });
+});
+
+const asOwnerA = () => testEnv.authenticatedContext(OWNER_A).firestore();
+const asEditorA = () => testEnv.authenticatedContext(EDITOR_A).firestore();
+const asClientA = () => testEnv.authenticatedContext(CLIENT_A).firestore();
+const asOwnerB = () => testEnv.authenticatedContext(OWNER_B).firestore();
+const asAnon = () => testEnv.unauthenticatedContext().firestore();
+
+describe("connections — platform tokens", () => {
+  it("denies reads to an owner of the owning workspace", async () => {
+    // Not a typo: NOBODY reads this from a client, however privileged.
+    await assertFails(asOwnerA().doc("connections/conn_a").get());
+  });
+
+  it("denies reads to anonymous users", async () => {
+    await assertFails(asAnon().doc("connections/conn_a").get());
+  });
+
+  it("denies writes to an owner", async () => {
+    await assertFails(asOwnerA().doc("connections/conn_a").set({ accessTokenEnc: "mine now" }));
+  });
+
+  it("denies listing the collection", async () => {
+    await assertFails(asOwnerA().collection("connections").get());
+  });
+});
+
+describe("cross-workspace isolation", () => {
+  it("denies reading another workspace's brand", async () => {
+    await assertFails(asOwnerA().doc("brands/brand_b").get());
+  });
+
+  it("denies reading another workspace's post", async () => {
+    await assertFails(asOwnerA().doc("posts/post_b").get());
+  });
+
+  it("denies writing another workspace's post", async () => {
+    await assertFails(asOwnerB().doc("posts/post_pending").update({ status: "draft" }));
+  });
+
+  it("denies reading another workspace's document", async () => {
+    await assertFails(asOwnerA().doc(`workspaces/${WS_B}`).get());
+  });
+
+  it("allows reading your own workspace's brand", async () => {
+    await assertSucceeds(asOwnerA().doc("brands/brand_a").get());
+  });
+
+  it("denies moving a post into another workspace", async () => {
+    await assertFails(asOwnerA().doc("posts/post_pending").update({ workspaceId: WS_B }));
+  });
+});
+
+describe("client role — read-only plus approve/reject", () => {
+  it("allows reading brands", async () => {
+    await assertSucceeds(asClientA().doc("brands/brand_a").get());
+  });
+
+  it("denies creating a post", async () => {
+    await assertFails(
+      asClientA()
+        .doc("posts/new_post")
+        .set({ workspaceId: WS_A, brandId: "brand_a", status: "draft" }),
+    );
+  });
+
+  it("denies deleting a post", async () => {
+    await assertFails(asClientA().doc("posts/post_pending").delete());
+  });
+
+  it("denies editing a brand", async () => {
+    await assertFails(asClientA().doc("brands/brand_a").update({ name: "Renamed" }));
+  });
+
+  it("allows approving a post awaiting their decision", async () => {
+    await assertSucceeds(
+      asClientA()
+        .doc("posts/post_pending")
+        .update({
+          status: "approved",
+          approval: { required: true, decidedBy: CLIENT_A, note: "Looks great" },
+        }),
+    );
+  });
+
+  it("denies smuggling a caption edit alongside an approval", async () => {
+    await assertFails(
+      asClientA()
+        .doc("posts/post_pending")
+        .update({
+          status: "approved",
+          approval: { decidedBy: CLIENT_A },
+          variants: { facebook: { caption: "hijacked" } },
+        }),
+    );
+  });
+
+  it("denies approving straight to published", async () => {
+    await assertFails(
+      asClientA()
+        .doc("posts/post_pending")
+        .update({
+          status: "published",
+          approval: { decidedBy: CLIENT_A },
+        }),
+    );
+  });
+});
+
+describe("editor role", () => {
+  it("allows creating a post in their workspace", async () => {
+    await assertSucceeds(
+      asEditorA()
+        .doc("posts/new_post")
+        .set({ workspaceId: WS_A, brandId: "brand_a", status: "draft" }),
+    );
+  });
+
+  it("denies creating a post in another workspace", async () => {
+    await assertFails(
+      asEditorA()
+        .doc("posts/new_post")
+        .set({ workspaceId: WS_B, brandId: "brand_b", status: "draft" }),
+    );
+  });
+
+  it("denies managing members", async () => {
+    await assertFails(
+      asEditorA().doc(`workspaces/${WS_A}/members/someone_new`).set({ role: "editor" }),
+    );
+  });
+});
+
+describe("privilege escalation", () => {
+  it("denies a client promoting themselves to owner", async () => {
+    await assertFails(
+      asClientA().doc(`workspaces/${WS_A}/members/${CLIENT_A}`).update({ role: "owner" }),
+    );
+  });
+
+  it("denies an owner silently rewriting their own role", async () => {
+    await assertFails(
+      asOwnerA().doc(`workspaces/${WS_A}/members/${OWNER_A}`).update({ role: "client" }),
+    );
+  });
+
+  it("allows an owner to invite a new member", async () => {
+    await assertSucceeds(
+      asOwnerA().doc(`workspaces/${WS_A}/members/user_new`).set({ role: "editor" }),
+    );
+  });
+
+  it("denies transferring workspace ownership by field edit", async () => {
+    await assertFails(asOwnerA().doc(`workspaces/${WS_A}`).update({ ownerId: EDITOR_A }));
+  });
+});
+
+describe("server-owned collections", () => {
+  it("denies client writes to postMetrics", async () => {
+    await assertFails(
+      asOwnerA().doc("postMetrics/post_pending_facebook").update({ intentScore: 100 }),
+    );
+  });
+
+  it("allows members to read postMetrics", async () => {
+    await assertSucceeds(asOwnerA().doc("postMetrics/post_pending_facebook").get());
+  });
+
+  it("denies tampering with auditLogs", async () => {
+    await assertFails(asOwnerA().doc("auditLogs/log_1").update({ action: "nothing to see" }));
+  });
+
+  it("denies deleting auditLogs", async () => {
+    await assertFails(asOwnerA().doc("auditLogs/log_1").delete());
+  });
+
+  it("denies client-side workspace creation", async () => {
+    // Must be server-side: workspace + owner member doc have to land atomically.
+    await assertFails(
+      asOwnerA().doc("workspaces/ws_new").set({ name: "Sneaky", ownerId: OWNER_A }),
+    );
+  });
+});
+
+describe("anonymous access", () => {
+  it("denies reading brands", async () => {
+    await assertFails(asAnon().doc("brands/brand_a").get());
+  });
+
+  it("denies reading posts", async () => {
+    await assertFails(asAnon().doc("posts/post_pending").get());
+  });
+});
