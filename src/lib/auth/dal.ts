@@ -8,7 +8,7 @@ import { adminDb } from "../firebase-admin";
 import { adminAuth } from "../firebase-admin";
 import { ADMIN_ROLES, WRITER_ROLES, type Member, type Role, type User } from "@/types";
 
-import { SESSION_COOKIE } from "./session";
+import { SESSION_COOKIE } from "./session-cookie";
 
 /**
  * Data Access Layer — the real authorisation boundary.

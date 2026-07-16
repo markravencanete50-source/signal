@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import { adminAuth } from "../firebase-admin";
+import { SESSION_COOKIE } from "./session-cookie";
 
 /**
  * Firebase session cookie lifecycle.
@@ -11,9 +12,12 @@ import { adminAuth } from "../firebase-admin";
  * ~1 hour and are readable by JS, so they'd need refreshing and would be
  * exposed to XSS. A session cookie is httpOnly, lasts days, and can be revoked
  * server-side.
+ *
+ * The cookie *name* lives in the import-free `session-cookie` module so the
+ * middleware can read it without bundling `firebase-admin` (see that file).
  */
 
-export const SESSION_COOKIE = "__session";
+export { SESSION_COOKIE };
 
 /** 5 days. Firebase caps session cookies at 14; shorter limits the blast radius of theft. */
 const SESSION_MAX_AGE_MS = 5 * 24 * 60 * 60 * 1000;
