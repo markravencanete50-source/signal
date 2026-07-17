@@ -30,9 +30,12 @@ const serverSchema = z.object({
   CLOUDINARY_API_KEY: z.string().min(1),
   CLOUDINARY_API_SECRET: z.string().min(1),
 
-  // Resend
-  RESEND_API_KEY: z.string().min(1),
-  EMAIL_FROM: z.string().min(1),
+  // Resend — OPTIONAL. Email degrades gracefully with these unset (see
+  // `isEmailConfigured` in lib/resend): invites/approvals/digests still complete
+  // and their links are generated; only delivery is skipped. Sending to real
+  // recipients needs a verified domain, so email can wait until one exists.
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(1).optional(),
 
   // LLM — OPTIONAL. AI degrades gracefully with neither set (see `isAiConfigured`
   // in lib/llm): the Composer works without predicted scores, Ask Signal returns

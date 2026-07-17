@@ -4,6 +4,15 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Changed — Email (Resend) is now optional
+
+- **Email degrades gracefully**, like AI and billing. `RESEND_API_KEY`/`EMAIL_FROM`
+  are optional in `env.ts`; `sendEmail` skips delivery (with a `console.warn`) when
+  they're unset instead of throwing, so invites/approvals/digests still complete
+  and their links still generate — only the email goes unsent. This lets the app
+  run fully before a verified sending domain exists (Resend's free tier can't send
+  to real recipients without one). New `isEmailConfigured()` gate.
+
 ### Added — Free scheduler (GitHub Actions) + APP_URL resiliency
 
 - **`.github/workflows/cron.yml`** — free replacement for the dropped Vercel crons
