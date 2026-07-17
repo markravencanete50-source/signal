@@ -1,20 +1,20 @@
 import "server-only";
 
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
-import { AiUnavailableError, isAiConfigured } from "../claude";
+import { AiUnavailableError, generateVisionStructured, isAiConfigured } from "../llm";
 
 /**
- * Native-format guard — watermark detection via Claude vision.
+ * Native-format guard — watermark detection via LLM vision.
  *
  * Recycled TikTok/CapCut content is down-ranked by Meta, so on video upload we
- * extract a frame and ask Claude whether it carries one of those watermarks. If
- * so, the media library re-exports a cropped version (Cloudinary) and publishes
- * that instead.
+ * extract a frame and ask a vision model whether it carries one of those
+ * watermarks. If so, the media library re-exports a cropped version (Cloudinary)
+ * and publishes that instead.
  *
- * Returns `{ detected: false }` silently when AI isn't configured — the guard is
- * an enhancement, not a gate; upload still succeeds without it.
+ * Returns `{ detected: false }` silently when AI isn't configured OR the vision
+ * check fails — the guard is an enhancement, not a gate; upload still succeeds
+ * without it, and free vision models are best-effort.
  */
 
 const detectionSchema = z.object({
@@ -40,46 +40,21 @@ const detectionJsonSchema = {
   additionalProperties: false,
 };
 
-let client: Anthropic | null = null;
-
 export async function detectWatermark(frameUrl: string): Promise<WatermarkDetection> {
   if (!isAiConfigured()) {
     // No key → assume clean. The upload proceeds; nothing is falsely stripped.
     return { detected: false, source: "none", reasoning: "AI not configured; guard skipped." };
   }
 
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   try {
-    const response = await client.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 400,
+    return await generateVisionStructured({
       system:
         "You inspect a single video frame for recycled-content watermarks. Look specifically for the TikTok logo/username watermark or the CapCut logo, usually in a corner or moving across the frame. Report only what is actually visible.",
-      tools: [
-        {
-          name: "report",
-          description: "Report the watermark finding.",
-          input_schema: detectionJsonSchema as Anthropic.Tool.InputSchema,
-        },
-      ],
-      tool_choice: { type: "tool", name: "report" },
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "url", url: frameUrl } },
-            { type: "text", text: "Does this frame carry a TikTok or CapCut watermark?" },
-          ],
-        },
-      ],
+      prompt: "Does this frame carry a TikTok or CapCut watermark?",
+      imageUrl: frameUrl,
+      schema: detectionSchema,
+      jsonSchema: detectionJsonSchema,
     });
-
-    const toolUse = response.content.find((b) => b.type === "tool_use");
-    if (!toolUse || toolUse.type !== "tool_use") {
-      return { detected: false, source: "none", reasoning: "No structured response." };
-    }
-    return detectionSchema.parse(toolUse.input);
   } catch (err) {
     if (err instanceof AiUnavailableError) {
       return { detected: false, source: "none", reasoning: "AI not configured; guard skipped." };

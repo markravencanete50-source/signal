@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { generateSuggestions } from "@/lib/ai/suggest";
 import { requireBrandAccess } from "@/lib/auth/dal";
-import { AiUnavailableError, isAiConfigured } from "@/lib/claude";
+import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { WRITER_ROLES } from "@/types";
 
 /**

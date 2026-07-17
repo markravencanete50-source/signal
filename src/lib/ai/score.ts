@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { Platform } from "@/types";
 
-import { generateStructured } from "../claude";
+import { generateStructured } from "../llm";
 
 /**
  * Predicted intent score — backs the Composer's score ring (`/api/ai/score`).

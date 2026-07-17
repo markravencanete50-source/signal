@@ -30,7 +30,7 @@ process.env.FIREBASE_ADMIN_PRIVATE_KEY = "unused-in-emulator";
 process.env.META_APP_ID = "test";
 process.env.META_APP_SECRET = "test";
 process.env.META_WEBHOOK_VERIFY_TOKEN = "test";
-process.env.ANTHROPIC_API_KEY = "test";
+process.env.GROQ_API_KEY = "test";
 
 const BRAND = "brand_pub";
 const WS = "ws_pub";

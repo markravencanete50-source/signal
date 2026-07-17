@@ -32,7 +32,7 @@ process.env.META_APP_SECRET = "test";
 process.env.META_WEBHOOK_VERIFY_TOKEN = "test";
 // env() validates the whole contract, so this must be present. The fake key
 // makes the sentiment call fail fast and fall back to neutral — fine here.
-process.env.ANTHROPIC_API_KEY = "test";
+process.env.GROQ_API_KEY = "test";
 
 const WS = "ws_sync";
 const BRAND_A = "brand_sync_a";

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { Platform } from "@/types";
 
-import { generateStructured } from "../claude";
+import { generateStructured } from "../llm";
 
 /**
  * Caption generation — platform-tuned caption options + hashtag suggestions.

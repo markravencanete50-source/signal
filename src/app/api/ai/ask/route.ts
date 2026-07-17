@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { AskUnavailable, askSignalStream } from "@/lib/ai/ask";
 import { requireBrandAccess } from "@/lib/auth/dal";
-import { isAiConfigured } from "@/lib/claude";
+import { isAiConfigured } from "@/lib/llm";
 
 /**
  * POST /api/ai/ask — streaming grounded answer for the Ask Signal chat.

@@ -4,6 +4,32 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Added — Free scheduler (GitHub Actions) + APP_URL resiliency
+
+- **`.github/workflows/cron.yml`** — free replacement for the dropped Vercel crons
+  (Hobby plan can't run them). Pings the six authenticated cron routes on schedule
+  with `x-cron-secret`; `workflow_dispatch` triggers any route manually. Cadences
+  match the original `vercel.json` except publish runs every 5 min (GitHub's cron
+  floor). Needs a `CRON_SECRET` Actions secret and an optional `APP_URL` variable.
+- **`APP_URL` now falls back** to `https://${VERCEL_PROJECT_PRODUCTION_URL}` (the
+  stable production host) when unset, so links resolve instead of the env failing
+  to parse. Explicit `APP_URL` still wins and must match the Meta OAuth redirect.
+
+### Changed — LLM provider swap (Groq + OpenRouter, free-tier)
+
+- **Replaced Anthropic Claude with Groq (primary) + OpenRouter (fallback)** to run
+  AI at zero cost. `lib/claude.ts` → `lib/llm.ts`; both providers speak the OpenAI
+  protocol, so one `openai` client drives both. Public surface
+  (`generateStructured`, `isAiConfigured`, `AiUnavailableError`) is unchanged —
+  the eight `lib/ai/*` builders only changed an import path. Added
+  `createChatStream` (Ask Signal streaming) and `generateVisionStructured`
+  (watermark guard). Every call runs through `withFallback`: when Groq hits its
+  free-tier daily token cap, the request transparently retries on OpenRouter.
+- `env.ts`: `ANTHROPIC_API_KEY` → optional `GROQ_API_KEY` + `OPENROUTER_API_KEY`
+  (AI degrades gracefully with neither set, like Stripe). `.env.example` updated.
+- Added `.npmrc` (`legacy-peer-deps=true`) for `openai@5`'s stale `zod` peer, and
+  `react-is` as a direct dependency (recharts needs it but doesn't declare it).
+
 ### Phase 10 — Global search
 
 **Added**

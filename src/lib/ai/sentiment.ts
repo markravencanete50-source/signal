@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { generateStructured, isAiConfigured } from "../claude";
+import { generateStructured, isAiConfigured } from "../llm";
 import type { Sentiment } from "@/types";
 
 /**

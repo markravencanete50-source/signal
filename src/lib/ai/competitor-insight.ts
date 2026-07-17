@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { generateStructured, isAiConfigured } from "../claude";
+import { generateStructured, isAiConfigured } from "../llm";
 
 /**
  * Competitor comparison insight — the one-line "what this means" under the table.

@@ -6,8 +6,8 @@ import Stripe from "stripe";
  * Stripe client + configuration gate.
  *
  * The single choke point for the Stripe SDK (mirrors how `adapters/` is the only
- * place that touches the Graph API and `lib/claude` the only place that calls
- * Anthropic). Server-side only — the secret key never reaches a browser. Lazily
+ * place that touches the Graph API and `lib/llm` the only place that calls the
+ * LLM API). Server-side only — the secret key never reaches a browser. Lazily
  * constructed so a build, or a deployment with billing switched off, still works.
  */
 

@@ -1,8 +1,6 @@
 import "server-only";
 
-import Anthropic from "@anthropic-ai/sdk";
-
-import { isAiConfigured } from "../claude";
+import { createChatStream, isAiConfigured } from "../llm";
 import { buildBrandDataPack, renderDataPack, type BrandDataPack } from "./brand-context";
 
 /**
@@ -42,36 +40,10 @@ export async function askSignalStream(
   const pack = await buildBrandDataPack(brandId);
   if (!pack) throw new AskUnavailable("No data for this brand.");
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const system = `${SYSTEM_HEADER}\n\n--- YOUR BRAND'S DATA ---\n${dataOrEmpty(pack)}`;
 
-  // messages.stream yields events; we forward only text deltas as plain strings.
-  const anthropicStream = client.messages.stream({
-    model: "claude-opus-4-8",
-    max_tokens: 1024,
-    system,
-    messages: [{ role: "user", content: question }],
-  });
-
-  return new ReadableStream<string>({
-    async start(controller) {
-      try {
-        for await (const event of anthropicStream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            controller.enqueue(event.delta.text);
-          }
-        }
-      } catch (err) {
-        controller.enqueue(
-          err instanceof Error
-            ? `\n\n(Sorry — I hit an error: ${err.message})`
-            : "\n\n(Sorry — I hit an error.)",
-        );
-      } finally {
-        controller.close();
-      }
-    },
-  });
+  // Groq primary, OpenRouter fallback; forwards text deltas as plain strings.
+  return createChatStream({ system, user: question, maxTokens: 1024 });
 }
 
 /** When the brand has synced nothing yet, tell the model that explicitly. */

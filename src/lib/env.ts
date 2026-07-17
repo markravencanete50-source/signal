@@ -6,7 +6,7 @@ import { z } from "zod";
  * Server-side environment contract.
  *
  * Importing this module from client code is a build error (`server-only`), which
- * is the point: it holds the Meta app secret, the Anthropic key and the token
+ * is the point: it holds the Meta app secret, the LLM API keys and the token
  * encryption key, none of which may ever reach a browser bundle.
  *
  * Validation is lazy (see `env()` below) rather than at module load. A top-level
@@ -34,11 +34,26 @@ const serverSchema = z.object({
   RESEND_API_KEY: z.string().min(1),
   EMAIL_FROM: z.string().min(1),
 
-  // Anthropic
-  ANTHROPIC_API_KEY: z.string().min(1),
+  // LLM — OPTIONAL. AI degrades gracefully with neither set (see `isAiConfigured`
+  // in lib/llm): the Composer works without predicted scores, Ask Signal returns
+  // a friendly "not configured" message, etc. Groq is primary, OpenRouter the
+  // fallback; either alone is enough to switch AI on.
+  GROQ_API_KEY: z.string().min(1).optional(),
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
 
-  // App
-  APP_URL: z.string().url(),
+  // App — the absolute origin used to build OAuth redirect URIs, invite/approval
+  // links, public report URLs, SmartLink targets and Stripe return URLs.
+  //
+  // Set it explicitly (it must match the URI registered with Meta for OAuth). If
+  // it's ever unset, fall back to Vercel's *stable* production domain
+  // (VERCEL_PROJECT_PRODUCTION_URL — the production host, constant across
+  // deployments, unlike the per-deploy VERCEL_URL) so links still resolve instead
+  // of the whole env failing to parse. Explicit APP_URL always wins.
+  APP_URL: z.preprocess((v) => {
+    if (typeof v === "string" && v.length > 0) return v;
+    const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    return prod ? `https://${prod}` : v;
+  }, z.string().url()),
 
   // AES-256-GCM needs exactly 32 bytes; as hex that is 64 chars. Enforced here
   // because a short key fails deep inside node:crypto with an opaque error.
@@ -50,7 +65,7 @@ const serverSchema = z.object({
 
   // Stripe — OPTIONAL. Billing is a drop-in: with these unset the app runs
   // exactly as before and the Billing screen shows an "unconfigured" state,
-  // mirroring how AI degrades without ANTHROPIC_API_KEY. Only `stripe()` and the
+  // mirroring how AI degrades without an LLM key. Only `stripe()` and the
   // billing routes read them, so their absence never breaks publish/sync/etc.
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),

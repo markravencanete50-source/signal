@@ -1,7 +1,7 @@
 import "server-only";
 
 import { generateCaption } from "./ai/caption";
-import { isAiConfigured } from "./claude";
+import { isAiConfigured } from "./llm";
 import { claimDueAutolists, replaceItem, saveAutolistProgress } from "./db/autolists";
 import { getBrand } from "./db/brands";
 import { getPostIntentScore } from "./db/metrics";

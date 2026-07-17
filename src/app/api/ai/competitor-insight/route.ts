@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireBrandAccess } from "@/lib/auth/dal";
-import { AiUnavailableError, isAiConfigured } from "@/lib/claude";
+import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { generateCompetitorInsight } from "@/lib/ai/competitor-insight";
 import { buildCompetitorRows } from "@/lib/competitors/rows";
 import { WRITER_ROLES } from "@/types";

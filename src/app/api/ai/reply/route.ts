@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireBrandAccess } from "@/lib/auth/dal";
-import { AiUnavailableError, isAiConfigured } from "@/lib/claude";
+import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { getBrand } from "@/lib/db/brands";
 import { getInboxItem } from "@/lib/db/inbox";
 import { getRecentCaptions } from "@/lib/db/posts";

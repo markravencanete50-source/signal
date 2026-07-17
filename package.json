@@ -16,15 +16,16 @@
     "test:integration": "firebase emulators:exec --only firestore --project signal-integration \"vitest run --no-file-parallelism tests/integration\""
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.111.0",
     "@react-email/components": "^1.0.12",
     "cloudinary": "^2.10.0",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.1.0",
     "next": "16.2.10",
     "next-themes": "^0.4.6",
+    "openai": "^5.23.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-is": "^19.2.7",
     "recharts": "^3.9.2",
     "resend": "^6.17.2",
     "server-only": "^0.0.1",

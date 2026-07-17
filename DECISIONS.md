@@ -429,3 +429,66 @@ infrastructure and instant relevance — acceptable for the target user, and the
 cap is a one-line change if it ever bites. Brand/post/media results carry a
 `brandId` so the client switches the active brand before navigating (those views
 are brand-scoped), making a cross-brand hit land in the right place.
+
+## 026 — LLM provider: Groq primary + OpenRouter fallback, replacing Anthropic
+
+**Date:** 2026-07-17 · **Phase:** post-10 · **Status:** accepted (confirmed with Lee)
+
+The build used Anthropic Claude (`lib/claude.ts`). To run Signal at zero cost,
+Lee chose to swap to **free-tier hosted LLM APIs**. Both Groq and OpenRouter
+speak the OpenAI protocol, so a single `openai` client drives both — only the
+base URL, key and model id differ.
+
+Chosen: **Groq primary** (`llama-3.3-70b-versatile`), **OpenRouter fallback**
+(`meta-llama/llama-3.3-70b-instruct:free`). `lib/claude.ts` became `lib/llm.ts`;
+its public surface (`generateStructured`, `isAiConfigured`, `AiUnavailableError`)
+is unchanged, so the eight `lib/ai/*` prompt builders only changed an import
+path. Anthropic's tool-use structured-output maps to OpenAI forced
+function-calling; streaming (Ask Signal) and vision (watermark guard) got their
+own helpers (`createChatStream`, `generateVisionStructured`).
+
+Every call runs through `withFallback`, which tries each configured provider in
+order — so when Groq hits its low free-tier daily token cap (~100K TPD on the
+70B model), the same request transparently retries on OpenRouter. Both keys are
+**optional** in `env.ts` (like Stripe): with neither set, AI degrades exactly as
+before. Groq and OpenRouter were chosen partly on privacy grounds — neither
+trains on API data by default, unlike the Gemini/Mistral free tiers, which
+matters for client business data.
+
+Vision (watermark detection) uses JSON-object response mode rather than a forced
+tool call, because some free vision models can't combine image input with
+tool-calling; the guard already degrades to "clean" on any failure, so a
+best-effort free vision model is acceptable.
+
+Cost: `openai@5` still declares a stale `zod@^3` optional peer, so an `.npmrc`
+with `legacy-peer-deps=true` is required for install to resolve (locally and on
+Vercel). Reinstalling also dropped the hoisted transitive `react-is` that
+recharts needs but doesn't declare, so it's now a direct dependency.
+
+## 027 — Scheduler: GitHub Actions cron; APP_URL falls back to Vercel prod host
+
+**Date:** 2026-07-17 · **Phase:** post-10 · **Status:** accepted (confirmed with Lee)
+
+DECISIONS #007 left the Hobby-plan scheduling as "external scheduler, TBD" after
+#47c6fa7 dropped the `vercel.json` crons. Chosen concrete implementation:
+**GitHub Actions** (`.github/workflows/cron.yml`) — free and unlimited on public
+repos, version-controlled beside the existing CI, no third-party account. One
+workflow declares all schedules; a `case` on `github.event.schedule` maps each
+firing to its endpoint(s), and `workflow_dispatch` allows manual triggering. It
+pings the authenticated cron routes with `x-cron-secret` (curl `-f`, so a broken
+secret or 5xx fails the run visibly). Original cadences preserved, except
+**publish is `*/5` not `* * * * *`** — GitHub's cron floor is 5 minutes.
+
+Trade-off accepted: GitHub-hosted cron can be delayed under load and auto-
+disables after 60 days without commits. Because every engine is idempotent and
+`claimDuePosts` only reads due posts, a late/duplicated trigger publishes a bit
+late but never double-posts. For minute precision the alternatives remain
+cron-job.org (1-min, free) or reverting #47c6fa7 on Vercel Pro. Requires a
+`CRON_SECRET` Actions secret and an optional `APP_URL` Actions variable.
+
+**APP_URL resiliency:** made `APP_URL` fall back (via a zod `preprocess`) to
+`https://${VERCEL_PROJECT_PRODUCTION_URL}` when unset — the _stable_ production
+host, unlike per-deploy `VERCEL_URL`. Explicit `APP_URL` always wins (it must
+still be set to match the Meta-registered OAuth redirect URI), but a fresh or
+misconfigured env now generates correct production links instead of failing to
+parse. All 11 `env().APP_URL` call sites are unchanged.

@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { generateStructured } from "../claude";
+import { generateStructured } from "../llm";
 import { buildBrandDataPack, renderDataPack } from "./brand-context";
 
 /**

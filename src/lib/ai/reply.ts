@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { Sentiment } from "@/types";
 
-import { generateStructured } from "../claude";
+import { generateStructured } from "../llm";
 
 /**
  * Inbox reply suggestions — a draft response to a comment or mention, in the
