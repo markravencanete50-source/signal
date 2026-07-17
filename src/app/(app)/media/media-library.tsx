@@ -146,7 +146,19 @@ async function uploadOne(file: File): Promise<void> {
     `https://api.cloudinary.com/v1_1/${sig.cloudName}/${resourceType}/upload`,
     { method: "POST", body: form },
   );
-  if (!cloudRes.ok) throw new Error("Cloudinary rejected the upload.");
+  if (!cloudRes.ok) {
+    // Surface Cloudinary's own reason — "Invalid Signature" almost always means
+    // the server's CLOUDINARY_API_SECRET doesn't match the account (wrong or
+    // placeholder key, or not redeployed), which is a config fix, not a bug.
+    let detail = `HTTP ${cloudRes.status}`;
+    try {
+      const body = (await cloudRes.json()) as { error?: { message?: string } };
+      if (body?.error?.message) detail = body.error.message;
+    } catch {
+      // Non-JSON error body; keep the status code.
+    }
+    throw new Error(`Cloudinary rejected the upload: ${detail}`);
+  }
 
   const uploaded = (await cloudRes.json()) as {
     public_id: string;

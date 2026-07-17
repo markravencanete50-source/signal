@@ -4,6 +4,16 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Fixed — slow feature switching + opaque Cloudinary upload error
+
+- **Instant navigation.** Added `app/(app)/loading.tsx` — the App Router had no
+  Suspense boundary, so every feature switch blocked on the destination page's
+  server query before rendering. A neutral skeleton now shows immediately (shell
+  persists); nested segments inherit it, so one file covers every view.
+- **Clearer upload failures.** The media uploader now surfaces Cloudinary's actual
+  error (e.g. "Invalid Signature") instead of a generic "rejected" message —
+  making a credentials/config problem diagnosable rather than a mystery.
+
 ### Changed — Email (Resend) is now optional
 
 - **Email degrades gracefully**, like AI and billing. `RESEND_API_KEY`/`EMAIL_FROM`
