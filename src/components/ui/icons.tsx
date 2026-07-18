@@ -167,6 +167,12 @@ export const InfoIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const TrashIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+  </Icon>
+);
+
 export const SparkIcon = ({ className }: IconProps) => (
   <svg
     viewBox="0 0 24 24"

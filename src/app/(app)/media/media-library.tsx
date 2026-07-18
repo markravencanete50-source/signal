@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-import { PlusIcon } from "@/components/ui/icons";
+import { PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
 /**
@@ -111,7 +111,7 @@ export function MediaLibrary({ assets, totalBytes }: { assets: MediaTile[]; tota
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
           {visible.map((asset) => (
-            <MediaTileView key={asset.id} asset={asset} />
+            <MediaTileView key={asset.id} asset={asset} onDeleted={() => router.refresh()} />
           ))}
         </div>
       )}
@@ -189,7 +189,30 @@ async function uploadOne(file: File): Promise<void> {
   if (!registerRes.ok) throw new Error("Uploaded, but couldn't be saved.");
 }
 
-function MediaTileView({ asset }: { asset: MediaTile }) {
+function MediaTileView({ asset, onDeleted }: { asset: MediaTile; onDeleted: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    const warning =
+      asset.usageCount > 0
+        ? `This asset has been used in ${asset.usageCount} post${asset.usageCount === 1 ? "" : "s"}. Deleting it removes the file permanently — already-published posts may lose their image. Delete anyway?`
+        : "Delete this asset permanently? This can't be undone.";
+    if (!window.confirm(warning)) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/media/${asset.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "Could not delete the asset.");
+      }
+      onDeleted();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not delete the asset.");
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="group border-border bg-surface-2 relative aspect-square overflow-hidden rounded-[14px] border">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -200,18 +223,28 @@ function MediaTileView({ asset }: { asset: MediaTile }) {
         loading="lazy"
       />
 
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={deleting}
+        aria-label="Delete asset"
+        className="bg-danger text-accent-fg absolute top-2 right-2 grid size-7 place-items-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-60"
+      >
+        <TrashIcon className="size-[15px]" />
+      </button>
+
       {asset.usageCount > 0 && (
-        <span className="absolute top-2 right-2 rounded-[7px] bg-black/55 px-2 py-0.5 text-[0.66rem] font-semibold text-white backdrop-blur-sm">
+        <span className="absolute top-2 left-2 rounded-[7px] bg-black/55 px-2 py-0.5 text-[0.66rem] font-semibold text-white backdrop-blur-sm">
           Used {asset.usageCount}×
         </span>
       )}
       {asset.type === "video" && asset.durationSec !== undefined && (
-        <span className="absolute top-2 left-2 flex items-center gap-1 rounded-[7px] bg-black/55 px-2 py-0.5 text-[0.66rem] font-semibold text-white">
+        <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-[7px] bg-black/55 px-2 py-0.5 text-[0.66rem] font-semibold text-white">
           ▶ {formatDuration(asset.durationSec)}
         </span>
       )}
       {asset.watermarkStripped && (
-        <span className="bg-warning-soft text-warning absolute bottom-2 left-2 rounded-[7px] px-2 py-0.5 text-[0.62rem] font-bold">
+        <span className="bg-warning-soft text-warning absolute bottom-2 right-2 rounded-[7px] px-2 py-0.5 text-[0.62rem] font-bold">
           Watermark stripped
         </span>
       )}
