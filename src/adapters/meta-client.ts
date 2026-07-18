@@ -14,8 +14,17 @@ import { env } from "@/lib/env";
  * Pinned Graph version. Meta deprecates versions on a ~2-year clock and
  * unversioned calls silently follow the latest, which changes behaviour under
  * you. Bump deliberately and re-run the adapter tests.
+ *
+ * Bumped v21.0 -> v25.0 (2026-07-18): page_impressions_unique /
+ * post_impressions_unique were retired for all versions on 2026-06-15, and
+ * their replacements (page_total_media_view_unique /
+ * post_total_media_view_unique) didn't exist before v25.0 — v21.0 rejected
+ * them with the same "must be a valid insights metric" error as the metric it
+ * replaced. No other breaking changes found across v22-v25 for the endpoints
+ * this file calls (OAuth exchange, /me/accounts, Page feed/photos, IG media
+ * container + publish).
  */
-export const GRAPH_VERSION = "v21.0";
+export const GRAPH_VERSION = "v25.0";
 export const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 /** Scopes requested at OAuth. Each must be justified in App Review — see README. */
