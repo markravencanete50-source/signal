@@ -187,7 +187,10 @@ export const facebookAdapter: PlatformAdapter = {
     const [insights, engagement] = await Promise.all([
       graphFetch<{ data: FbInsight[] }>(`/${externalId}/insights`, {
         accessToken,
-        params: { metric: "post_impressions_unique,post_clicks" },
+        // post_impressions_unique was deprecated for all Graph versions on
+        // 2026-06-15 (Meta's Nov-2025-announced impressions→media-view
+        // shift); post_total_media_view_unique is the documented replacement.
+        params: { metric: "post_total_media_view_unique,post_clicks" },
       }),
       graphFetch<{
         likes?: { summary?: { total_count: number } };
@@ -203,7 +206,7 @@ export const facebookAdapter: PlatformAdapter = {
       likes: engagement.likes?.summary?.total_count ?? 0,
       comments: engagement.comments?.summary?.total_count ?? 0,
       shares: engagement.shares?.count ?? 0,
-      reach: insightValue(insights.data, "post_impressions_unique"),
+      reach: insightValue(insights.data, "post_total_media_view_unique"),
       // saves / watchTimeAvg / reachNonFollowers intentionally omitted: Facebook
       // does not report them. Undefined means "not measurable", not zero.
     };
@@ -217,8 +220,14 @@ export const facebookAdapter: PlatformAdapter = {
     const res = await graphFetch<{ data: FbInsight[] }>(`/${conn.pageId}/insights`, {
       accessToken,
       params: {
+        // page_impressions_unique was deprecated for all Graph versions on
+        // 2026-06-15; page_total_media_view_unique is the closest surviving
+        // analog. Meta narrowed the underlying event from "impression"
+        // (delivered to feed) to "media view" (visually rendered), so reach
+        // numbers will read lower than the old metric reported — that's the
+        // new definition, not a data problem.
         metric:
-          "page_impressions_unique,page_impressions,page_post_engagements,page_views_total,page_fans",
+          "page_total_media_view_unique,page_impressions,page_post_engagements,page_views_total,page_fans",
         period: "day",
         since: Math.floor(range.from.getTime() / 1000).toString(),
         until: Math.floor(range.to.getTime() / 1000).toString(),
@@ -247,7 +256,7 @@ export const facebookAdapter: PlatformAdapter = {
       }
     };
 
-    put("page_impressions_unique", (d, v) => (d.reach = v));
+    put("page_total_media_view_unique", (d, v) => (d.reach = v));
     put("page_impressions", (d, v) => (d.impressions = v));
     put("page_post_engagements", (d, v) => (d.engagement = v));
     put("page_views_total", (d, v) => (d.profileViews = v));
