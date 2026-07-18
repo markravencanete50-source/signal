@@ -181,8 +181,9 @@ async function publishNow(postId: string): Promise<string | null> {
   // Not claimable = a cron tick beat us to it by milliseconds — it's publishing.
   if (!claimed) return null;
 
+  let outcome: { ok: boolean; errors: string[] };
   try {
-    await publishPost(claimed);
+    outcome = await publishPost(claimed);
   } catch (err) {
     // Unexpected throw (network/Firestore hiccup) — reset via the retry policy
     // so the post isn't stranded in `publishing`, then tell the user.
@@ -196,13 +197,12 @@ async function publishNow(postId: string): Promise<string | null> {
     return `Publishing failed: ${message}${decision.exhausted ? "" : " — it will be retried automatically."}`;
   }
 
-  // publishPost records per-variant outcomes itself; read the post back to see
-  // whether it actually went out.
-  const after = await getPost(postId);
-  if (after?.status === "published") return null;
+  if (outcome.ok) return null;
 
-  const firstError = Object.values(after?.results ?? {}).find((r) => r?.error)?.error;
-  return `Publishing failed: ${firstError ?? "unknown error"}${
+  // publishPost already recorded the failure + retry decision; read the post
+  // back only to phrase whether a retry is coming or attempts are exhausted.
+  const after = await getPost(postId);
+  return `Publishing failed: ${outcome.errors[0] ?? "unknown error"}${
     after?.status === "failed" ? "" : " — it will be retried automatically."
   }`;
 }

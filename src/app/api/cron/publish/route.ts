@@ -31,8 +31,16 @@ async function handle(request: Request) {
   const outcomes: Array<{ id: string; ok: boolean; error?: string }> = [];
   for (const post of posts) {
     try {
-      await publishPost(post);
-      outcomes.push({ id: post.id, ok: true });
+      const result = await publishPost(post);
+      // Variant-level failures don't throw (the engine records them + retry),
+      // but the outcome report must still show them — a 200 with ok:true for a
+      // post that didn't publish is exactly the silent failure this app is
+      // built to avoid.
+      outcomes.push(
+        result.ok
+          ? { id: post.id, ok: true }
+          : { id: post.id, ok: false, error: result.errors.join("; ") },
+      );
     } catch (err) {
       // publishPost handles per-variant failures internally; reaching here means
       // an unexpected throw (e.g. Firestore hiccup) that would otherwise strand

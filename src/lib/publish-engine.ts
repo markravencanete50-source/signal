@@ -33,7 +33,7 @@ import { decideRetry } from "@/services/publish-policy";
  * "Enabled variant" = a key present in `post.variants`. The Composer only writes
  * variants for platforms the user toggled on.
  */
-export async function publishPost(post: Post): Promise<void> {
+export async function publishPost(post: Post): Promise<{ ok: boolean; errors: string[] }> {
   const results: Partial<
     Record<VariantKey, { externalId?: string; permalink?: string; error?: string }>
   > = {};
@@ -90,7 +90,7 @@ export async function publishPost(post: Post): Promise<void> {
 
   if (!anyFailed) {
     await markPublished(post.id, results);
-    return;
+    return { ok: true, errors: [] };
   }
 
   // Something failed — decide retry vs give up. `post.attempts` was already
@@ -105,6 +105,11 @@ export async function publishPost(post: Post): Promise<void> {
   if (decision.exhausted) {
     await onExhausted(post, errors.join("; "));
   }
+
+  // Callers must see variant-level failures too — the cron used to report
+  // ok:true here because nothing THREW, which is precisely the silent-failure
+  // pattern this engine exists to prevent.
+  return { ok: false, errors };
 }
 
 /**
