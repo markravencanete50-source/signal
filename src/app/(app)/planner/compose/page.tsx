@@ -2,11 +2,12 @@ import { requireTeamView } from "@/lib/auth/view-guard";
 import { listConnectionsForBrand } from "@/lib/db/connections";
 import { listAssets } from "@/lib/db/media";
 import { listPostMetrics } from "@/lib/db/metrics";
+import { getPost } from "@/lib/db/posts";
 import { getAppContext } from "@/lib/workspace-context";
 import { bestTimeSlots, type PostTiming } from "@/services/besttime";
 import type { Platform } from "@/types";
 
-import { Composer } from "./composer";
+import { Composer, type EditPost } from "./composer";
 
 export const metadata = { title: "New post — Signal" };
 
@@ -14,14 +15,15 @@ export const metadata = { title: "New post — Signal" };
  * Composer route `/planner/compose`. Server-loads the brand's media, connected
  * platforms and best-time slots, then hands off to the client modal.
  *
- * Accepts a `?caption=` prefill (from Studio's "Draft it") so a suggestion lands
- * as a ready-to-edit draft. Best-time slots are computed from the brand's own
- * post metrics via the pure engine.
+ * Accepts a `?caption=` prefill (from Studio's "Draft it") and `?edit=<postId>`
+ * to open an existing post for editing — the Planner's click-to-edit target.
+ * Best-time slots are computed from the brand's own post metrics via the pure
+ * engine.
  */
 export default async function ComposePage({
   searchParams,
 }: {
-  searchParams: Promise<{ caption?: string }>;
+  searchParams: Promise<{ caption?: string; edit?: string }>;
 }) {
   await requireTeamView();
   const { activeBrand, workspace } = await getAppContext();
@@ -61,6 +63,32 @@ export default async function ComposePage({
       a.type === "video" ? a.secureUrl.replace(/\.(mp4|mov|webm|m4v)$/i, ".jpg") : a.secureUrl,
   }));
 
+  // Click-to-edit: load the post and hand it to the composer prefilled. A post
+  // from another brand is ignored rather than errored — the id came from a URL.
+  let editPost: EditPost | undefined;
+  if (params.edit) {
+    const post = await getPost(params.edit);
+    if (post && post.brandId === activeBrand.id) {
+      editPost = {
+        id: post.id,
+        status: post.status,
+        scheduledAt: post.scheduledAt,
+        pillar: post.pillar,
+        fbCaption: post.variants.facebook?.caption,
+        igCaption: post.variants.instagram?.caption,
+        mediaAssetIds: [
+          ...new Set([
+            ...(post.variants.facebook?.mediaAssetIds ?? []),
+            ...(post.variants.instagram?.mediaAssetIds ?? []),
+          ]),
+        ],
+        fbPermalink: post.results?.facebook?.permalink,
+        igPermalink: post.results?.instagram?.permalink,
+        hasPublishedFb: Boolean(post.results?.facebook?.externalId),
+      };
+    }
+  }
+
   return (
     <Composer
       brandId={activeBrand.id}
@@ -70,6 +98,7 @@ export default async function ComposePage({
       pillars={activeBrand.pillars.map((p) => p.name)}
       bestTimes={bestTimes}
       initialCaption={params.caption ?? ""}
+      editPost={editPost}
     />
   );
 }

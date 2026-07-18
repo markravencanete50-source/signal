@@ -179,6 +179,22 @@ export const facebookAdapter: PlatformAdapter = {
     };
   },
 
+  async updateCaption(
+    _conn: Connection,
+    accessToken: string,
+    externalId: string,
+    caption: string,
+  ): Promise<void> {
+    // Facebook allows editing a Page post's message in place. The returned
+    // `success` flag is Graph's own confirmation; a failure surfaces as a
+    // GraphError from graphFetch.
+    await graphFetch(`/${externalId}`, {
+      accessToken,
+      method: "POST",
+      params: { message: caption },
+    });
+  },
+
   async fetchPostInsights(
     _conn: Connection,
     accessToken: string,

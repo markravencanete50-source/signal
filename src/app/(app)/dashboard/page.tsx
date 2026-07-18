@@ -2,10 +2,8 @@ import Link from "next/link";
 
 import { Card, CardTitle } from "@/components/ui/card";
 import { IntentRing } from "@/components/ui/intent-ring";
-import { PlatformIcon } from "@/components/ui/platform-icon";
 import { PlusIcon, WarningIcon } from "@/components/ui/icons";
 import { Sparkline } from "@/components/ui/sparkline";
-import { Chip, POST_STATUS_CHIP } from "@/components/ui/chip";
 import { latestAnomaly } from "@/lib/db/anomalies";
 import { listConnectionsForBrand } from "@/lib/db/connections";
 import { listDaily, listPostMetrics } from "@/lib/db/metrics";
@@ -13,6 +11,8 @@ import { listPostsInRange } from "@/lib/db/posts";
 import { getAppContext } from "@/lib/workspace-context";
 import { headlineMetrics } from "@/services/analytics";
 import type { Platform } from "@/types";
+
+import { LocalGreeting, TodayQueue, type QueueItem } from "./local-time";
 
 export const metadata = { title: "Dashboard — Signal" };
 
@@ -24,19 +24,13 @@ export const metadata = { title: "Dashboard — Signal" };
 export default async function DashboardPage() {
   const { user, workspace, activeBrand, role } = await getAppContext();
 
-  const greeting = timeGreeting();
   const firstName = user.name?.split(" ")[0] ?? "there";
-  const today = new Date().toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
   const canCompose = role !== "client";
 
   if (!activeBrand) {
     return (
       <>
-        <Header greeting={greeting} name={firstName} today={today} canCompose={canCompose} />
+        <Header name={firstName} canCompose={canCompose} />
         <ConnectPrompt canManage={role === "owner" || role === "admin"} />
       </>
     );
@@ -53,7 +47,7 @@ export default async function DashboardPage() {
     listDaily(activeBrand.id, "ig", fromDate, toDate),
     listPostMetrics(activeBrand.id, 60),
     latestAnomaly(workspace.id),
-    todaysQueue(activeBrand.id),
+    queueWindow(activeBrand.id),
   ]);
 
   const daily = [...dailyFb, ...dailyIg];
@@ -68,12 +62,7 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <Header
-        greeting={greeting}
-        name={firstName}
-        today={`${today} · ${activeBrand.name}`}
-        canCompose={canCompose}
-      />
+      <Header name={firstName} brandName={activeBrand.name} canCompose={canCompose} />
 
       {connections.length === 0 ? (
         <ConnectPrompt canManage={role === "owner" || role === "admin"} />
@@ -123,38 +112,7 @@ export default async function DashboardPage() {
           <div className="grid gap-3.5 lg:grid-cols-[1.35fr_1fr]">
             <Card>
               <h3 className="mb-3 text-[0.95rem] font-semibold">Today&rsquo;s queue</h3>
-              {queue.length === 0 ? (
-                <p className="text-text-2 text-[0.86rem]">
-                  Nothing scheduled for today.{" "}
-                  {canCompose && (
-                    <Link
-                      href="/planner/compose"
-                      className="text-accent font-semibold hover:underline"
-                    >
-                      Plan a post
-                    </Link>
-                  )}
-                </p>
-              ) : (
-                queue.map((q) => {
-                  const chip = POST_STATUS_CHIP[q.status];
-                  return (
-                    <div
-                      key={q.id}
-                      className="border-border flex items-center gap-3 border-b py-2.5 last:border-none last:pb-0"
-                    >
-                      <span className="font-display text-text-2 w-12 shrink-0 text-[0.85rem] font-semibold">
-                        {q.time}
-                      </span>
-                      {q.platforms.map((p) => (
-                        <PlatformIcon key={p} platform={p} size={22} />
-                      ))}
-                      <p className="flex-1 truncate text-[0.86rem]">{q.label}</p>
-                      <Chip variant={chip.variant}>{chip.label}</Chip>
-                    </div>
-                  );
-                })
-              )}
+              <TodayQueue items={queue} canCompose={canCompose} />
             </Card>
 
             <Card>
@@ -183,23 +141,18 @@ export default async function DashboardPage() {
 }
 
 function Header({
-  greeting,
   name,
-  today,
+  brandName,
   canCompose,
 }: {
-  greeting: string;
   name: string;
-  today: string;
+  brandName?: string;
   canCompose: boolean;
 }) {
   return (
     <div className="mb-[22px] flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-[1.5rem] font-bold tracking-[-0.02em]">
-          {greeting}, {name}
-        </h1>
-        <p className="text-text-2 mt-[3px] text-[0.88rem]">{today}</p>
+        <LocalGreeting name={name} suffix={brandName} />
       </div>
       {canCompose && (
         <Link
@@ -271,23 +224,23 @@ function ConnectPrompt({ canManage }: { canManage: boolean }) {
   );
 }
 
-/** Posts scheduled or published for today, for the queue panel. */
-async function todaysQueue(brandId: string) {
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+/**
+ * Posts around "today" for the queue panel. The window is ±1 day of SERVER time
+ * (UTC) so the client — the only party that knows the user's timezone — can
+ * filter down to the browser-local today without ever missing an edge post.
+ */
+async function queueWindow(brandId: string): Promise<QueueItem[]> {
+  const now = Date.now();
+  const from = new Date(now - 86_400_000).toISOString();
+  const to = new Date(now + 2 * 86_400_000).toISOString();
 
-  const posts = await listPostsInRange(brandId, startOfDay, endOfDay);
+  const posts = await listPostsInRange(brandId, from, to);
 
   return posts
     .filter((p) => p.scheduledAt)
-    .sort((a, b) => (a.scheduledAt! < b.scheduledAt! ? -1 : 1))
     .map((p) => ({
       id: p.id,
-      time: new Date(p.scheduledAt!).toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      scheduledAt: p.scheduledAt!,
       status: p.status,
       platforms: (Object.keys(p.variants) as (keyof typeof p.variants)[]).map(
         (k) => (k === "facebook" ? "fb" : "ig") as Platform,
@@ -296,13 +249,6 @@ async function todaysQueue(brandId: string) {
         .split("\n")[0]!
         .slice(0, 40),
     }));
-}
-
-function timeGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
 }
 
 function formatNumber(n: number): string {

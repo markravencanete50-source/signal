@@ -159,6 +159,16 @@ export function createMockAdapter(platform: Platform): PlatformAdapter {
       };
     },
 
+    // Mirror the real adapters: FB supports editing a published caption, IG
+    // doesn't — so the mock only exposes it for FB, keeping the UI honest.
+    ...(isIg
+      ? {}
+      : {
+          async updateCaption(): Promise<void> {
+            await latency("update-caption", 150, 400);
+          },
+        }),
+
     async fetchPostInsights(
       conn: Connection,
       _accessToken: string,

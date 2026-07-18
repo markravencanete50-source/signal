@@ -8,9 +8,18 @@ import { getAdapter } from "@/adapters/registry";
 import { sendApprovalRequestEmail } from "@/lib/approvals/send-request-email";
 import { requireBrandAccess } from "@/lib/auth/dal";
 import { requestApproval } from "@/lib/db/approvals";
+import { getDecryptedToken, listConnectionsForBrand } from "@/lib/db/connections";
 import { getAsset } from "@/lib/db/media";
-import { createPost, getPost } from "@/lib/db/posts";
+import {
+  claimPostById,
+  createPost,
+  getPost,
+  recordPublishOutcome,
+  updatePost,
+} from "@/lib/db/posts";
 import { listTeamMembers } from "@/lib/db/workspaces";
+import { publishPost } from "@/lib/publish-engine";
+import { decideRetry } from "@/services/publish-policy";
 import { WRITER_ROLES, type PostStatus, type PostVariant, type PostVariants } from "@/types";
 
 /**
@@ -31,6 +40,8 @@ const variantSchema = z.object({
 
 const composeSchema = z.object({
   brandId: z.string().min(1),
+  /** Present when editing an existing post from the Planner. */
+  postId: z.string().optional(),
   platforms: z.array(z.enum(["fb", "ig"])).min(1),
   variants: z.object({
     facebook: variantSchema.optional(),
@@ -86,29 +97,60 @@ export async function submitPost(_prev: ComposeState, formData: FormData): Promi
       return { error: "Pick a time to schedule this post." };
     }
 
-    const postId = await createPost({
-      brandId: data.brandId,
-      workspaceId,
-      createdBy: session.uid,
-      status,
-      scheduledAt,
-      pillar: data.pillar,
-      variants,
-      aiMeta:
-        data.predictedScore !== undefined
-          ? {
-              suggested: false,
-              predictedScore: data.predictedScore,
-              reasoning: data.predictedReasoning,
-            }
-          : undefined,
-    });
+    let postId: string;
+
+    if (data.postId) {
+      // Editing an existing post. The brand-match check matters: brandId is
+      // what was authorised above, so a post from another brand/workspace can't
+      // be smuggled in via its id.
+      const existing = await getPost(data.postId);
+      if (!existing || existing.brandId !== data.brandId) {
+        return { error: "This post no longer exists." };
+      }
+      if (!EDITABLE_STATUSES.includes(existing.status)) {
+        return { error: `A ${existing.status} post can't be edited here.` };
+      }
+      await updatePost(data.postId, { status, scheduledAt, pillar: data.pillar, variants });
+      postId = data.postId;
+    } else {
+      postId = await createPost({
+        brandId: data.brandId,
+        workspaceId,
+        createdBy: session.uid,
+        status,
+        scheduledAt,
+        pillar: data.pillar,
+        variants,
+        aiMeta:
+          data.predictedScore !== undefined
+            ? {
+                suggested: false,
+                predictedScore: data.predictedScore,
+                reasoning: data.predictedReasoning,
+              }
+            : undefined,
+      });
+    }
 
     // Approval flow: mint a token and email the workspace's client(s) a
     // one-click approve/reject link. A missing email isn't fatal — the post
     // still sits in Approvals for a team member to hand off.
     if (data.intent === "request_approval") {
       await sendApprovalRequest(postId, workspaceId).catch(() => {});
+    }
+
+    // "Publish now" publishes SYNCHRONOUSLY, right here, through the same
+    // claim-lock + engine as the cron — the cron remains the backstop for
+    // scheduled posts and retries, but an immediate publish must never sit
+    // waiting on an external scheduler's clock (GitHub cron has a 5-minute
+    // floor and is throttled under load; that gap is exactly how "Publish now"
+    // posts silently went nowhere).
+    if (data.intent === "publish") {
+      const publishError = await publishNow(postId);
+      if (publishError) {
+        revalidatePath("/planner");
+        return { error: publishError };
+      }
     }
 
     revalidatePath("/planner");
@@ -118,6 +160,92 @@ export async function submitPost(_prev: ComposeState, formData: FormData): Promi
   }
 
   redirect("/planner");
+}
+
+const EDITABLE_STATUSES: PostStatus[] = [
+  "draft",
+  "scheduled",
+  "pending_approval",
+  "approved",
+  "failed",
+];
+
+/**
+ * Claim + publish one post inline and report the outcome as a user-facing
+ * error string (null = published). A failed publish is handed to the normal
+ * retry policy, so the cron re-attempts it — the user sees the real error
+ * immediately instead of a post that silently never appears.
+ */
+async function publishNow(postId: string): Promise<string | null> {
+  const claimed = await claimPostById(postId);
+  // Not claimable = a cron tick beat us to it by milliseconds — it's publishing.
+  if (!claimed) return null;
+
+  try {
+    await publishPost(claimed);
+  } catch (err) {
+    // Unexpected throw (network/Firestore hiccup) — reset via the retry policy
+    // so the post isn't stranded in `publishing`, then tell the user.
+    const message = err instanceof Error ? err.message : "Unknown publish error";
+    const decision = decideRetry(claimed.attempts, new Date());
+    await recordPublishOutcome(postId, {
+      exhausted: decision.exhausted,
+      nextAttemptAt: decision.nextAttemptAt,
+      results: { facebook: { error: message }, instagram: { error: message } },
+    }).catch(() => {});
+    return `Publishing failed: ${message}${decision.exhausted ? "" : " — it will be retried automatically."}`;
+  }
+
+  // publishPost records per-variant outcomes itself; read the post back to see
+  // whether it actually went out.
+  const after = await getPost(postId);
+  if (after?.status === "published") return null;
+
+  const firstError = Object.values(after?.results ?? {}).find((r) => r?.error)?.error;
+  return `Publishing failed: ${firstError ?? "unknown error"}${
+    after?.status === "failed" ? "" : " — it will be retried automatically."
+  }`;
+}
+
+/**
+ * Edit the caption of an ALREADY-PUBLISHED Facebook post. Facebook allows
+ * updating a Page post's message via the Graph API; Instagram does not expose
+ * caption editing at all, which is why this is FB-only. The stored variant is
+ * updated too so Signal and Facebook stay in agreement.
+ */
+export async function updatePublishedCaption(
+  postId: string,
+  caption: string,
+): Promise<{ error?: string }> {
+  try {
+    const post = await getPost(postId);
+    if (!post) return { error: "Post not found." };
+    if (post.status !== "published") return { error: "Only published posts can use this." };
+
+    await requireBrandAccess(post.brandId, WRITER_ROLES);
+
+    const externalId = post.results?.facebook?.externalId;
+    if (!externalId) return { error: "This post has no published Facebook copy to edit." };
+
+    const connection = (await listConnectionsForBrand(post.brandId)).find(
+      (c) => c.platform === "fb",
+    );
+    if (!connection) return { error: "No Facebook account connected." };
+
+    const adapter = getAdapter("fb");
+    if (!adapter.updateCaption) return { error: "Editing published posts isn't supported here." };
+
+    const token = await getDecryptedToken(connection);
+    await adapter.updateCaption(connection, token, externalId, caption);
+
+    const variants = { ...post.variants, facebook: { ...post.variants.facebook!, caption } };
+    await updatePost(postId, { variants });
+
+    revalidatePath("/planner");
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not update the caption." };
+  }
 }
 
 function normaliseVariant(v: z.infer<typeof variantSchema>): PostVariant {

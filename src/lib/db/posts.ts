@@ -205,6 +205,37 @@ export async function claimDuePosts(nowIso: string, limit = 20): Promise<Post[]>
   return claimed;
 }
 
+/**
+ * Atomically claim ONE specific post for publishing — the synchronous
+ * "Publish now" path. Same lock discipline as `claimDuePosts` (scheduled →
+ * publishing inside a transaction), so a cron tick racing this call can never
+ * double-publish: whichever transaction commits first wins, the loser sees
+ * `publishing` and backs off.
+ */
+export async function claimPostById(id: string): Promise<Post | null> {
+  try {
+    return await adminDb().runTransaction(async (tx) => {
+      const ref = adminDb().doc(`${COLLECTION}/${id}`);
+      const snap = await tx.get(ref);
+      const data = snap.data() as Post | undefined;
+      if (!data || data.status !== "scheduled") return null;
+
+      tx.update(ref, {
+        status: "publishing" satisfies PostStatus,
+        attempts: FieldValue.increment(1),
+      });
+      return {
+        ...docToPost(id, data),
+        status: "publishing" as PostStatus,
+        attempts: (data.attempts ?? 0) + 1,
+      };
+    });
+  } catch {
+    // Contention — a cron run claimed it first. That run will publish it.
+    return null;
+  }
+}
+
 /** Mark a post published, recording each platform's external id + permalink. */
 export async function markPublished(
   id: string,

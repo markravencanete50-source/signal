@@ -4,6 +4,61 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Fixed — "Publish now" is now synchronous (posts no longer silently go nowhere)
+
+- **Root cause of the vanished post:** "Publish now" only scheduled the post for
+  the current instant and waited for the publish cron — whose real clock is a
+  GitHub Actions `*/5` schedule with a 5-minute floor that GitHub throttles for
+  long stretches (one observed gap: hours). The post sat `scheduled` forever.
+  `submitPost` now claims the post via a new transactional `claimPostById` and
+  runs `publishPost` inline: same idempotent engine, same lock discipline (a
+  racing cron tick can never double-publish), but the user gets the real
+  outcome immediately — including the actual Meta error on failure, with the
+  retry pipeline as backstop. Per the competitor research (docs/), silent
+  publish failures are the #1 complaint across every tool in this category.
+- **Cron resilience:** the hourly GitHub schedule now also sweeps publish, so a
+  *scheduled* post is never more than ~an hour late even when `*/5` stalls.
+
+### Fixed — timezone correctness (UTC serverless clock vs the user's browser)
+
+- Dashboard greeting/date, Today's queue times and "today" window, and the
+  Planner's day bucketing + today-ring were all computed server-side in UTC —
+  for a UTC+8 user that meant "18:24" for a 02:24 AM action, evening greetings
+  at 2 AM, and posts appearing on the wrong calendar day. All user-clock maths
+  now runs client-side (new `useHydrated` hook — `useSyncExternalStore`-based
+  so the strict no-setState-in-effect lint stays satisfied); servers only fetch
+  generously-buffered windows.
+
+### Added — Planner views, click-to-edit everywhere, published-post editing
+
+- **Month / Week / Day views** with URL state (`?view=&date=`), local-time
+  grids, a Today button, and per-view navigation. Week shows chip times; Day is
+  a time-ordered agenda (and the natural mobile layout). Legacy `?month=` URLs
+  still resolve.
+- **Click-to-edit actually works now**: the calendar already linked to
+  `/planner/compose?edit=<id>` but the composer ignored the param and opened
+  blank. The composer now loads the post (captions, media, pillar, schedule),
+  routes saves through `updatePost`, and keeps every intent (draft / schedule /
+  publish / approval). Dashboard queue rows link to edit too.
+- **Published posts open in a live-post mode**: edit the Facebook caption in
+  place (new optional `updateCaption` on the adapter interface — FB implements
+  it via the Graph API, Instagram has no caption-edit endpoint so its adapter
+  omits it and the UI says so), plus View-on-Facebook/Instagram permalinks.
+
+### Changed — mobile + motion polish
+
+- Calendar grids scroll horizontally on narrow screens instead of crushing;
+  composer paddings tightened on mobile; queue rows/chips gained hover states.
+- New shared keyframes (`modalIn`, `fadeSlideIn`): composer entrance, calendar
+  view transitions, and a route-level fade-up via `(app)/template.tsx` — all
+  `motion-safe:` so prefers-reduced-motion users see none of it.
+
+### Docs — competitor research
+
+- `docs/competitor-research-2026-07.md`: 9-agent sweep of Buffer, Hootsuite,
+  Later, Metricool, SocialBee, Postiz, Mixpost + a general pain-point sweep,
+  synthesized into a prioritized zero-API-cost roadmap for Signal.
+
 ### Added — Meta App Review prerequisites: legal pages, webhook endpoint, app icon
 
 - **Public legal pages** `/privacy` and `/terms` — required by App Review and

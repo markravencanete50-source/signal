@@ -21,7 +21,11 @@ name: Scheduled jobs
 on:
   schedule:
     - cron: "*/5 * * * *" # publish        (intended: every minute)
-    - cron: "0 * * * *" # sync + autolists  (hourly)
+    - cron: "0 * * * *" # publish sweep + sync + autolists (hourly). Publish rides
+      # along here as a belt-and-braces catch-up: GitHub's */5 schedule is
+      # best-effort and can be throttled for long stretches, and "Publish now"
+      # is synchronous in-app anyway — this hourly sweep only exists so a
+      # SCHEDULED post is never more than ~an hour late even when */5 stalls.
     - cron: "0 3 * * *" # tokens            (daily 03:00 UTC)
     - cron: "0 8 * * *" # digest            (daily 08:00 UTC)
     - cron: "30 4 * * *" # competitors      (daily 04:30 UTC)
@@ -59,7 +63,7 @@ jobs:
           # Map the firing trigger to the endpoint(s) it should hit.
           case "${{ github.event.schedule }}" in
             "*/5 * * * *") endpoints="publish" ;;
-            "0 * * * *")   endpoints="sync autolists" ;;
+            "0 * * * *")   endpoints="publish sync autolists" ;;
             "0 3 * * *")   endpoints="tokens" ;;
             "0 8 * * *")   endpoints="digest" ;;
             "30 4 * * *")  endpoints="competitors" ;;

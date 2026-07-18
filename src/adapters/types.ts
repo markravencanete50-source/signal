@@ -130,6 +130,19 @@ export interface PlatformAdapter {
 
   publish(conn: Connection, accessToken: string, variant: PostVariant): Promise<PublishResult>;
 
+  /**
+   * Edit the caption of an already-published post, where the platform allows
+   * it. Optional: Facebook Pages support message edits via the Graph API;
+   * Instagram has no caption-edit endpoint, so its adapter omits this and the
+   * UI disables the affordance.
+   */
+  updateCaption?(
+    conn: Connection,
+    accessToken: string,
+    externalId: string,
+    caption: string,
+  ): Promise<void>;
+
   fetchPostInsights(conn: Connection, accessToken: string, externalId: string): Promise<RawMetrics>;
 
   fetchAccountInsights(

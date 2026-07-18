@@ -10,7 +10,7 @@ import { WarningIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import type { Platform } from "@/types";
 
-import { submitPost, type ComposeState } from "./actions";
+import { submitPost, updatePublishedCaption, type ComposeState } from "./actions";
 
 /**
  * Composer modal. Replicates the preview's `.modal` exactly: platform toggles,
@@ -38,6 +38,20 @@ export interface BestTimeSlot {
   personalised: boolean;
 }
 
+/** An existing post opened for editing (the Planner's click-to-edit target). */
+export interface EditPost {
+  id: string;
+  status: string;
+  scheduledAt?: string;
+  pillar?: string;
+  fbCaption?: string;
+  igCaption?: string;
+  mediaAssetIds: string[];
+  fbPermalink?: string;
+  igPermalink?: string;
+  hasPublishedFb: boolean;
+}
+
 export function Composer({
   brandId,
   brandName,
@@ -46,6 +60,7 @@ export function Composer({
   pillars,
   bestTimes = [],
   initialCaption = "",
+  editPost,
 }: {
   brandId: string;
   brandName: string;
@@ -54,21 +69,68 @@ export function Composer({
   pillars: string[];
   bestTimes?: BestTimeSlot[];
   initialCaption?: string;
+  editPost?: EditPost;
 }) {
   const router = useRouter();
 
-  // Default the selection to whatever's connected (or both if nothing is yet).
-  const initial = connectedPlatforms.length ? connectedPlatforms : (["fb", "ig"] as Platform[]);
-  const [platforms, setPlatforms] = useState<Set<Platform>>(new Set(initial));
+  const isPublished = editPost?.status === "published";
+  const isMidFlight = editPost?.status === "publishing";
+  // Published/mid-flight posts get a reduced UI; everything else is fully editable.
+  const locked = isPublished || isMidFlight;
 
-  const [tab, setTab] = useState<VariantTab>("shared");
-  // Prefilled from Studio's "Draft it" — lands as the shared caption.
-  const [shared, setShared] = useState(initialCaption);
-  const [fbCaption, setFbCaption] = useState("");
-  const [igCaption, setIgCaption] = useState("");
-  const [selectedMedia, setSelectedMedia] = useState<string[]>([]);
-  const [pillar, setPillar] = useState<string>(pillars[0] ?? "");
-  const [scheduledAt, setScheduledAt] = useState("");
+  // Seed state from the post being edited, falling back to new-post defaults.
+  // Identical captions collapse into the shared tab; differing ones land in
+  // their platform tabs so nothing is silently merged.
+  const seedFb = editPost?.fbCaption ?? "";
+  const seedIg = editPost?.igCaption ?? "";
+  const captionsMatch = Boolean(seedFb) && Boolean(seedIg) && seedFb === seedIg;
+  const singleCaption = (seedFb && !seedIg) || (!seedFb && seedIg);
+
+  const initialPlatforms: Platform[] = editPost
+    ? ([editPost.fbCaption !== undefined && "fb", editPost.igCaption !== undefined && "ig"].filter(
+        Boolean,
+      ) as Platform[])
+    : connectedPlatforms.length
+      ? connectedPlatforms
+      : (["fb", "ig"] as Platform[]);
+
+  const [platforms, setPlatforms] = useState<Set<Platform>>(new Set(initialPlatforms));
+
+  const [tab, setTab] = useState<VariantTab>(() =>
+    editPost && !captionsMatch && !singleCaption && (seedFb || seedIg) ? "fb" : "shared",
+  );
+  // Prefilled from Studio's "Draft it" (new posts) or the post being edited.
+  const [shared, setShared] = useState(() => {
+    if (!editPost) return initialCaption;
+    if (captionsMatch || singleCaption) return seedFb || seedIg;
+    return "";
+  });
+  const [fbCaption, setFbCaption] = useState(() =>
+    editPost && !captionsMatch && !singleCaption ? seedFb : "",
+  );
+  const [igCaption, setIgCaption] = useState(() =>
+    editPost && !captionsMatch && !singleCaption ? seedIg : "",
+  );
+  const [selectedMedia, setSelectedMedia] = useState<string[]>(editPost?.mediaAssetIds ?? []);
+  const [pillar, setPillar] = useState<string>(editPost?.pillar ?? pillars[0] ?? "");
+  const [scheduledAt, setScheduledAt] = useState(() =>
+    editPost?.scheduledAt && !locked ? isoToLocalInput(editPost.scheduledAt) : "",
+  );
+
+  // Published-caption update flow (FB only — IG has no caption-edit API).
+  const [savingCaption, setSavingCaption] = useState(false);
+  const [captionMsg, setCaptionMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function savePublishedCaption() {
+    if (!editPost) return;
+    setSavingCaption(true);
+    setCaptionMsg(null);
+    const res = await updatePublishedCaption(editPost.id, shared);
+    setSavingCaption(false);
+    setCaptionMsg(
+      res.error ? { ok: false, text: res.error } : { ok: true, text: "Facebook caption updated." },
+    );
+  }
 
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [score, setScore] = useState<{
@@ -115,7 +177,8 @@ export function Composer({
     const caption = effective(primary);
 
     const timer = setTimeout(async () => {
-      if (!caption.trim()) {
+      // No point scoring a post that's already live or mid-flight.
+      if (locked || !caption.trim()) {
         setScore(null);
         return;
       }
@@ -190,6 +253,7 @@ export function Composer({
     }
     return JSON.stringify({
       brandId,
+      postId: editPost && !locked ? editPost.id : undefined,
       platforms: [...platforms],
       variants,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
@@ -215,11 +279,13 @@ export function Composer({
     >
       <div
         role="dialog"
-        aria-label="New post"
-        className="border-border bg-surface shadow-card w-full max-w-[620px] rounded-[20px] border"
+        aria-label={editPost ? "Edit post" : "New post"}
+        className="border-border bg-surface shadow-card w-full max-w-[620px] rounded-[20px] border motion-safe:animate-[modalIn_.28s_cubic-bezier(.16,1,.3,1)]"
       >
-        <div className="border-border flex items-center justify-between border-b px-[22px] py-[18px]">
-          <h2 className="text-[1.05rem] font-bold">New post · {brandName}</h2>
+        <div className="border-border flex items-center justify-between border-b px-4 py-4 sm:px-[22px] sm:py-[18px]">
+          <h2 className="text-[1.05rem] font-bold">
+            {isPublished ? "Published post" : editPost ? "Edit post" : "New post"} · {brandName}
+          </h2>
           <button
             onClick={() => router.push("/planner")}
             aria-label="Close"
@@ -238,9 +304,21 @@ export function Composer({
           </button>
         </div>
 
-        <div className="p-[22px]">
+        <div className="p-4 sm:p-[22px]">
+          {isPublished && (
+            <div className="bg-accent-soft text-accent mb-4 rounded-[10px] px-3 py-2.5 text-[0.8rem] leading-relaxed font-medium">
+              This post is live. You can edit the Facebook caption below — Instagram doesn&rsquo;t
+              allow caption edits after publishing.
+            </div>
+          )}
+          {isMidFlight && (
+            <div className="bg-warning-soft text-warning mb-4 rounded-[10px] px-3 py-2.5 text-[0.8rem] leading-relaxed font-medium">
+              This post is publishing right now — check back in a moment.
+            </div>
+          )}
+
           {/* platform toggles */}
-          <div className="mb-4 flex gap-2">
+          <div className={cn("mb-4 flex gap-2", locked && "hidden")}>
             {(["fb", "ig"] as Platform[]).map((p) => {
               const on = platforms.has(p);
               const connected = connectedPlatforms.includes(p);
@@ -264,7 +342,12 @@ export function Composer({
           </div>
 
           {/* variant tabs */}
-          <div className="bg-surface-2 mb-2.5 flex w-fit gap-0.5 rounded-[10px] p-[3px]">
+          <div
+            className={cn(
+              "bg-surface-2 mb-2.5 flex w-fit gap-0.5 rounded-[10px] p-[3px]",
+              locked && "hidden",
+            )}
+          >
             {(
               [
                 ["shared", "Shared caption"],
@@ -288,6 +371,7 @@ export function Composer({
           <textarea
             value={active}
             onChange={(e) => setActive(e.target.value)}
+            readOnly={isMidFlight}
             placeholder={
               tab === "shared"
                 ? "Write your caption. Leave the FB/IG variants blank to use this everywhere."
@@ -302,7 +386,7 @@ export function Composer({
           </div>
 
           {/* hashtag suggestions */}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <div className={cn("mt-2 flex flex-wrap items-center gap-1.5", locked && "hidden")}>
             <button
               onClick={suggestHashtags}
               className="bg-accent-soft text-accent rounded-lg px-2.5 py-1 text-[0.74rem] font-semibold"
@@ -321,8 +405,12 @@ export function Composer({
           </div>
 
           {/* media picker */}
-          <span className="mt-[18px] mb-2 block text-[0.78rem] font-semibold">Media</span>
-          {media.length === 0 ? (
+          <span
+            className={cn("mt-[18px] mb-2 block text-[0.78rem] font-semibold", locked && "hidden")}
+          >
+            Media
+          </span>
+          {locked ? null : media.length === 0 ? (
             <p className="text-text-2 text-[0.82rem]">
               No media yet.{" "}
               <a href="/media" className="text-accent font-semibold hover:underline">
@@ -356,7 +444,7 @@ export function Composer({
             </div>
           )}
 
-          {platforms.has("ig") && selectedMedia.length === 0 && (
+          {!locked && platforms.has("ig") && selectedMedia.length === 0 && (
             <div className="bg-warning-soft text-warning mt-2.5 flex items-start gap-2 rounded-[10px] px-3 py-2.5 text-[0.78rem] leading-relaxed font-medium">
               <WarningIcon className="mt-px size-3.5 shrink-0" />
               Instagram posts need at least one image or video.
@@ -364,7 +452,7 @@ export function Composer({
           )}
 
           {/* pillar + schedule */}
-          <div className="mt-[18px] flex flex-wrap gap-3">
+          <div className={cn("mt-[18px] flex flex-wrap gap-3", locked && "hidden")}>
             {pillars.length > 0 && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-[0.78rem] font-semibold">Pillar</span>
@@ -393,7 +481,7 @@ export function Composer({
           </div>
 
           {/* best-time chips — from the brand's own data (or labelled benchmarks) */}
-          {bestTimes.length > 0 && (
+          {!locked && bestTimes.length > 0 && (
             <>
               <span className="mt-[18px] mb-2 block text-[0.78rem] font-semibold">
                 Best time —{" "}
@@ -418,7 +506,7 @@ export function Composer({
           )}
 
           {/* predicted score */}
-          {(score || scoring) && (
+          {!locked && (score || scoring) && (
             <div className="bg-surface-2 mt-[18px] flex items-center gap-4 rounded-[14px] p-4">
               {score ? (
                 <IntentRing score={score.score} size={64} />
@@ -452,23 +540,77 @@ export function Composer({
           <input type="hidden" name="payload" />
         </form>
 
-        <div className="border-border flex flex-wrap justify-end gap-2.5 border-t px-[22px] py-4">
-          <Button variant="ghost" onClick={() => submit("draft")} disabled={over}>
-            Save draft
-          </Button>
-          <Button variant="ghost" onClick={() => submit("request_approval")} disabled={over}>
-            Request approval
-          </Button>
-          <Button variant="ghost" onClick={() => submit("publish")} disabled={over}>
-            Publish now
-          </Button>
-          <Button onClick={() => submit("schedule")} disabled={over || !scheduledAt}>
-            Schedule
-          </Button>
+        <div className="border-border flex flex-wrap items-center justify-end gap-2.5 border-t px-4 py-4 sm:px-[22px]">
+          {isPublished ? (
+            <>
+              {captionMsg && (
+                <span
+                  role="status"
+                  className={cn(
+                    "mr-auto text-[0.8rem] font-medium",
+                    captionMsg.ok ? "text-success" : "text-danger",
+                  )}
+                >
+                  {captionMsg.text}
+                </span>
+              )}
+              {editPost?.fbPermalink && (
+                <a
+                  href={editPost.fbPermalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="border-border text-text-1 hover:bg-surface-2 inline-flex items-center rounded-[10px] border px-4 py-[9px] text-[0.88rem] font-semibold"
+                >
+                  View on Facebook
+                </a>
+              )}
+              {editPost?.igPermalink && (
+                <a
+                  href={editPost.igPermalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="border-border text-text-1 hover:bg-surface-2 inline-flex items-center rounded-[10px] border px-4 py-[9px] text-[0.88rem] font-semibold"
+                >
+                  View on Instagram
+                </a>
+              )}
+              {editPost?.hasPublishedFb && (
+                <Button onClick={savePublishedCaption} disabled={savingCaption || !shared.trim()}>
+                  {savingCaption ? "Updating…" : "Update Facebook caption"}
+                </Button>
+              )}
+            </>
+          ) : isMidFlight ? (
+            <Button variant="ghost" onClick={() => router.push("/planner")}>
+              Close
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={() => submit("draft")} disabled={over}>
+                {editPost ? "Save as draft" : "Save draft"}
+              </Button>
+              <Button variant="ghost" onClick={() => submit("request_approval")} disabled={over}>
+                Request approval
+              </Button>
+              <Button variant="ghost" onClick={() => submit("publish")} disabled={over}>
+                Publish now
+              </Button>
+              <Button onClick={() => submit("schedule")} disabled={over || !scheduledAt}>
+                {editPost ? "Save schedule" : "Schedule"}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+/** ISO timestamp → local datetime-local input value (YYYY-MM-DDTHH:mm). */
+function isoToLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /**

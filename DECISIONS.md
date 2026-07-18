@@ -492,3 +492,35 @@ host, unlike per-deploy `VERCEL_URL`. Explicit `APP_URL` always wins (it must
 still be set to match the Meta-registered OAuth redirect URI), but a fresh or
 misconfigured env now generates correct production links instead of failing to
 parse. All 11 `env().APP_URL` call sites are unchanged.
+
+## 028 — "Publish now" publishes synchronously; the cron is the backstop, not the driver
+
+The original design modelled "Publish now" as scheduled-for-now, letting the
+cron pick it up "within a minute". That assumption died twice in production:
+the real scheduler is GitHub Actions with a 5-minute floor, and GitHub
+throttles `*/5` schedules for long stretches — an observed post sat
+`scheduled` for hours while the user watched Facebook show nothing. Silent
+publish failure is also the #1 complaint across every competing tool
+(docs/competitor-research-2026-07.md), so this is the one path that must never
+depend on an external clock.
+
+`submitPost` with intent `publish` now claims the post transactionally
+(`claimPostById` — same scheduled→publishing lock as `claimDuePosts`, so a
+racing cron tick can never double-publish) and runs `publishPost` inline. The
+user gets the real Meta error in the composer on failure, and the retry
+pipeline still backs the post up. The hourly cron schedule additionally sweeps
+publish so a *scheduled* post is never more than ~an hour late when `*/5`
+stalls. For minute-precision scheduling, point a free external pinger
+(cron-job.org) at `/api/cron/publish` with the `x-cron-secret` header.
+
+## 029 — All user-clock/timezone maths is client-side; servers fetch buffered windows
+
+Serverless renders on a UTC clock. Anything computed from "now" or bucketed by
+"day" during SSR is wrong for anyone away from Greenwich — which produced 2 AM
+"Good evening"s, queue times 8 hours off, and Planner posts on the wrong
+calendar day for a UTC+8 user. The rule now: servers only FETCH, with windows
+buffered ±1 day (or ±45 for the Planner) so no timezone can push a post
+outside the range; the browser does all bucketing/formatting. Components gate
+on hydration via `useHydrated()` (`useSyncExternalStore`-based — no
+setState-in-effect, satisfying the strict react-hooks rule) so SSR and client
+never paint disagreeing dates.

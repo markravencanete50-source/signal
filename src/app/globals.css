@@ -99,3 +99,31 @@
     }
   }
 }
+
+/**
+ * Shared motion keyframes. Consumed via arbitrary animate values
+ * (`motion-safe:animate-[modalIn_.28s_ease]`); the global
+ * prefers-reduced-motion block above already collapses them to ~0ms for users
+ * who asked for less motion, and motion-safe: prevents them starting at all.
+ */
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
