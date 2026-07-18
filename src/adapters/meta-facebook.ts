@@ -220,14 +220,21 @@ export const facebookAdapter: PlatformAdapter = {
     const res = await graphFetch<{ data: FbInsight[] }>(`/${conn.pageId}/insights`, {
       accessToken,
       params: {
-        // page_impressions_unique was deprecated for all Graph versions on
-        // 2026-06-15; page_total_media_view_unique is the closest surviving
-        // analog. Meta narrowed the underlying event from "impression"
-        // (delivered to feed) to "media view" (visually rendered), so reach
-        // numbers will read lower than the old metric reported — that's the
-        // new definition, not a data problem.
-        metric:
-          "page_total_media_view_unique,page_impressions,page_post_engagements,page_views_total,page_fans",
+        // Verified live against the real Graph API (v25.0) on 2026-07-18 —
+        // Meta's own docs undersold how much this deprecation wave touched:
+        //   - page_impressions_unique -> page_total_media_view_unique (both
+        //     confirmed valid/invalid respectively via a live test call).
+        //     Meta narrowed "impression" (delivered to feed) to "media view"
+        //     (visually rendered), so reach reads lower than historical data —
+        //     that's the new definition, not a data problem.
+        //   - page_impressions (non-unique) has NO replacement — Meta retired
+        //     the concept at the page level entirely in the same views-only
+        //     push. impressions is left at 0 below; that means "no longer
+        //     measurable", not "zero impressions".
+        //   - page_fans -> page_follows (also silently broken; not mentioned
+        //     in any doc/changelog found, only caught by testing metrics one
+        //     at a time against a real token).
+        metric: "page_total_media_view_unique,page_post_engagements,page_views_total,page_follows",
         period: "day",
         since: Math.floor(range.from.getTime() / 1000).toString(),
         until: Math.floor(range.to.getTime() / 1000).toString(),
@@ -257,10 +264,10 @@ export const facebookAdapter: PlatformAdapter = {
     };
 
     put("page_total_media_view_unique", (d, v) => (d.reach = v));
-    put("page_impressions", (d, v) => (d.impressions = v));
     put("page_post_engagements", (d, v) => (d.engagement = v));
     put("page_views_total", (d, v) => (d.profileViews = v));
-    put("page_fans", (d, v) => (d.followers = v));
+    put("page_follows", (d, v) => (d.followers = v));
+    // impressions has no surviving metric — left at the byDate default (0).
 
     return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
   },
