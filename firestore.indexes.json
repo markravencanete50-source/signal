@@ -97,6 +97,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "brandId", "order": "ASCENDING" },
+        { "fieldPath": "syncedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "postMetrics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "brandId", "order": "ASCENDING" },
         { "fieldPath": "platform", "order": "ASCENDING" },
         { "fieldPath": "intentScore", "order": "DESCENDING" }
       ]
