@@ -1,0 +1,38 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Signal app icon — source of truth for the raster app-icon PNGs.
+    Full-bleed square (Meta / app stores apply their own corner mask): brand
+    indigo gradient (#4f46e5 accent) with the white line-chart mark from
+    components/ui/icons.tsx (path d="M4 16l4-7 4 4 4-9 4 6"), centred and scaled.
+    Regenerate the PNGs with: node scripts/render-icon.mjs
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1" />
+      <stop offset="0.55" stop-color="#4f46e5" />
+      <stop offset="1" stop-color="#4130b8" />
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.28" cy="0.2" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16" />
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <filter id="lift" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#1a1147" flood-opacity="0.32" />
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)" />
+  <rect width="1024" height="1024" fill="url(#sheen)" />
+
+  <g filter="url(#lift)">
+    <path
+      d="M4 16l4-7 4 4 4-9 4 6"
+      transform="translate(512 512) scale(32) translate(-12 -10)"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="2.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>

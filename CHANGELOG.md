@@ -4,6 +4,31 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Added — Meta App Review prerequisites: legal pages, webhook endpoint, app icon
+
+- **Public legal pages** `/privacy` and `/terms` — required by App Review and
+  reachable signed-out (added to the `proxy.ts` matcher exclusions, alongside a
+  shared `LegalDoc` shell). The privacy policy mirrors what the app actually does:
+  encrypted connection tokens, aggregated metrics (raw payloads discarded), media
+  via Cloudinary, and caption text sent to AI providers. Contact
+  (markravencanete50@gmail.com), effective date (18 July 2026) and governing
+  jurisdiction (the Philippines) are set; swap the contact to a domain address
+  once Signal has one.
+- **Meta webhook** `/api/webhooks/meta` — GET answers the `hub.challenge`
+  verification handshake when `hub.verify_token` matches `META_WEBHOOK_VERIFY_TOKEN`
+  (previously defined in `env.ts` but unused); POST verifies `X-Hub-Signature-256`
+  (HMAC-SHA256 over the raw body, constant-time) before acknowledging. New
+  `verifyHubSignature` helper in `lib/meta/` with unit tests. Events aren't routed
+  yet — the sync engine polls comments — but the endpoint passes verification,
+  which is what review checks. Verified end-to-end: challenge echo, wrong-token
+  403, unsigned/forged POST 401, valid-HMAC POST 200.
+- **App icon** — `public/brand/icon.svg` (full-bleed indigo gradient + the white
+  line-chart mark from `components/ui/icons.tsx`, centred) rasterised to
+  `public/brand/app-icon-{1024,512,180}.png` via `scripts/render-icon.mjs` (uses
+  the bundled `sharp`). The 1024² is the size Meta App Review requires.
+- README App Review checklist updated (privacy, terms, data-deletion and webhook
+  items checked with their routes); `.env.example` documents the webhook URL.
+
 ### Fixed — slow feature switching + opaque Cloudinary upload error
 
 - **Instant navigation.** Added `app/(app)/loading.tsx` — the App Router had no

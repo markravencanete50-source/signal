@@ -55,12 +55,14 @@ export const config = {
    *   - /approve/*       — one-click email approval, no login by design
    *   - /s/*             — public SmartLink (link-in-bio) pages, no auth by design
    *   - /data-deletion/* — public Meta data-deletion status page, no auth by design
+   *   - /privacy, /terms — public legal pages; Meta App Review reaches them
+   *                        signed-out, so they must not bounce to /login
    *   - /_next/*, favicon, images — static
    *
    * The trailing `.*\\.[\\w]+$` clause excludes any file-with-extension so real
    * files (og images, manifests) pass through without a redirect.
    */
   matcher: [
-    "/((?!api|r/|approve/|s/|data-deletion/|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)",
+    "/((?!api|r/|approve/|s/|data-deletion/|privacy|terms|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)",
   ],
 };

@@ -219,11 +219,13 @@ Publishing to real Pages/IG accounts needs App Review. Until it clears, run with
 - [ ] **Business verification** completed (Meta Business Manager). Slowest step —
       start it first; it can take days and needs company documents.
 - [ ] App type is **Business**, linked to a verified Business account.
-- [ ] Privacy policy URL — publicly reachable, describes what Signal stores
-      (aggregated metrics, captions, media) and for how long.
-- [ ] Terms of service URL.
-- [ ] **Data deletion callback** URL (or instructions URL) — required. Meta calls
-      it when a user requests deletion.
+- [x] Privacy policy URL — `/privacy` (public; describes what Signal stores —
+      aggregated metrics, captions, media — and for how long). Set a real contact
+      address and effective date in `src/app/privacy/page.tsx` before submitting.
+- [x] Terms of service URL — `/terms` (public). Set the contact address, effective
+      date and governing jurisdiction in `src/app/terms/page.tsx`.
+- [x] **Data deletion callback** URL — `/api/meta/data-deletion` (signed_request
+      verified; returns `{url, confirmation_code}`; status page at `/data-deletion/{code}`).
 - [ ] App icon (1024×1024) and category set.
 
 **Permissions to request** — justify each in terms of the user-facing feature:
@@ -248,7 +250,11 @@ it live on the Page). Narrate which permission each step exercises.
 - [ ] Instagram account is **Business** (not Creator/personal) and linked to the FB Page.
 - [ ] Valid OAuth redirect URI whitelisted for every environment (including Preview).
 - [ ] Short-lived → long-lived token exchange happens immediately on connect (60-day token).
-- [ ] Webhook endpoint verifies `X-Hub-Signature-256` and answers the GET challenge.
+- [x] Webhook endpoint verifies `X-Hub-Signature-256` and answers the GET challenge
+      — `/api/webhooks/meta` (GET echoes `hub.challenge` when `hub.verify_token`
+      matches `META_WEBHOOK_VERIFY_TOKEN`; POST rejects any body whose HMAC fails).
+      Events aren't routed yet — the sync engine polls comments — but the endpoint
+      passes verification, which is what review checks.
 - [ ] Test with **Test Users** or real tester-role accounts before submitting.
 
 **Known IG publishing constraints**
