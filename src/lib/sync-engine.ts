@@ -69,8 +69,11 @@ export async function runSync(): Promise<{ connections: number; anomalies: numbe
         await syncConnection(conn);
         await touchLastSync(conn.id);
       } catch (err) {
-        // One bad connection must not abort the whole workspace's sync.
+        // One bad connection must not abort the whole workspace's sync. Still
+        // log every failure — silently swallowing a non-auth error left this
+        // undiagnosable in production; only auth errors used to leave a trace.
         const message = err instanceof Error ? err.message : "Sync failed";
+        console.error(`[sync] connection ${conn.id} (${conn.platform}) failed: ${message}`);
         if (isAuthError(message)) await markConnectionError(conn.id, message).catch(() => {});
       }
     }
