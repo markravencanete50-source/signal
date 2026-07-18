@@ -112,8 +112,19 @@ async function syncConnection(conn: Connection): Promise<void> {
   // 2. Post metrics + intent for posts <14 days old.
   await syncPostMetrics(conn, token, adapter, new Date(now - FOURTEEN_DAYS_MS).toISOString());
 
-  // 3. New comments → inbox with sentiment.
-  await syncComments(conn, token, adapter, new Date(now - FOURTEEN_DAYS_MS));
+  // 3. New comments → inbox with sentiment. Isolated in its own try/catch:
+  // reading a Page's feed with nested comments needs Advanced Access on
+  // pages_read_engagement (confirmed via Graph's #10 error even with the
+  // scope genuinely granted on a Page-admin's own token) — a permission gate
+  // that account insights and post metrics don't share. Without this, one
+  // Standard-Access-only feature failing would throw away steps 1-2's
+  // already-successful writes and skip touchLastSync entirely.
+  try {
+    await syncComments(conn, token, adapter, new Date(now - FOURTEEN_DAYS_MS));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Comment sync failed";
+    console.error(`[sync] comments for connection ${conn.id} (${conn.platform}) failed: ${message}`);
+  }
 }
 
 async function syncPostMetrics(
