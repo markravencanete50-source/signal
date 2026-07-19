@@ -254,36 +254,56 @@ export const facebookAdapter: PlatformAdapter = {
     accessToken: string,
     range: DateRange,
   ): Promise<RawDaily[]> {
-    const res = await graphFetch<{ data: FbInsight[] }>(`/${conn.pageId}/insights`, {
-      accessToken,
-      params: {
-        // Verified live against the real Graph API (v25.0) on 2026-07-18 —
-        // Meta's own docs undersold how much this deprecation wave touched:
-        //   - page_impressions_unique -> page_total_media_view_unique (both
-        //     confirmed valid/invalid respectively via a live test call).
-        //     Meta narrowed "impression" (delivered to feed) to "media view"
-        //     (visually rendered), so reach reads lower than historical data —
-        //     that's the new definition, not a data problem.
-        //   - page_impressions (non-unique) has NO replacement — Meta retired
-        //     the concept at the page level entirely in the same views-only
-        //     push. impressions is left at 0 below; that means "no longer
-        //     measurable", not "zero impressions".
-        //   - page_fans -> page_follows (also silently broken; not mentioned
-        //     in any doc/changelog found, only caught by testing metrics one
-        //     at a time against a real token).
-        metric: "page_total_media_view_unique,page_post_engagements,page_views_total,page_follows",
-        period: "day",
-        since: Math.floor(range.from.getTime() / 1000).toString(),
-        until: Math.floor(range.to.getTime() / 1000).toString(),
-      },
-    });
+    // Verified live against the real Graph API (v25.0) on 2026-07-18 — Meta's
+    // own docs undersold how much this deprecation wave touched:
+    //   - page_impressions_unique -> page_total_media_view_unique (both
+    //     confirmed valid/invalid respectively via a live test call). Meta
+    //     narrowed "impression" (delivered to feed) to "media view" (visually
+    //     rendered), so reach reads lower than historical data — that's the new
+    //     definition, not a data problem.
+    //   - page_impressions (non-unique) has NO replacement — Meta retired the
+    //     concept at the page level entirely in the same views-only push.
+    //     impressions is left at 0 below; that means "no longer measurable".
+    //   - page_fans -> page_follows (also silently broken; only caught by
+    //     testing metrics one at a time against a real token).
+    const METRICS = [
+      "page_total_media_view_unique",
+      "page_post_engagements",
+      "page_views_total",
+      "page_follows",
+    ];
+    const timeParams = {
+      period: "day",
+      since: Math.floor(range.from.getTime() / 1000).toString(),
+      until: Math.floor(range.to.getTime() / 1000).toString(),
+    };
+    const fetchMetrics = (metrics: string[]) =>
+      graphFetch<{ data: FbInsight[] }>(`/${conn.pageId}/insights`, {
+        accessToken,
+        params: { ...timeParams, metric: metrics.join(",") },
+      });
+
+    // One combined call in the happy path. But Graph rejects the WHOLE request
+    // if any single metric is invalid — its standard response to a deprecation,
+    // and the exact reason this pipeline has broken account-wide before. So on
+    // failure, retry each metric on its own and keep whatever still resolves: a
+    // newly-retired metric then costs one field, not every daily row. Only if
+    // *all* metrics fail (a dead token, a down API) does the error propagate.
+    let data: FbInsight[];
+    try {
+      data = (await fetchMetrics(METRICS)).data;
+    } catch (err) {
+      const settled = await Promise.allSettled(METRICS.map((m) => fetchMetrics([m])));
+      data = settled.flatMap((r) => (r.status === "fulfilled" ? r.value.data : []));
+      if (data.length === 0) throw err;
+    }
 
     // Graph returns one row per metric, each with a values[] time series —
     // transposed from the per-day shape we store. Pivot on end_time.
     const byDate = new Map<string, RawDaily>();
 
     const put = (metric: string, apply: (d: RawDaily, v: number) => void) => {
-      const row = res.data.find((r) => r.name === metric);
+      const row = data.find((r) => r.name === metric);
       for (const v of row?.values ?? []) {
         if (!v.end_time) continue;
         const date = v.end_time.slice(0, 10);

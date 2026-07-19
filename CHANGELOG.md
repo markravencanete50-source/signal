@@ -4,6 +4,29 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Fixed — Sync captures data even when one Meta metric is deprecated
+
+- **The recurring "analytics captured nothing" failure.** Meta keeps retiring
+  Page insights metrics, and Graph rejects the *entire* insights call when any
+  one metric is invalid (see the `page_impressions`/`page_fans` migration
+  commits). `syncConnection` coupled account-insights and post-metrics, so a
+  single deprecated page metric threw before post metrics ran — discarding
+  post-level capture **and** skipping `touchLastSync`, even for an account that
+  was otherwise perfectly readable. Nothing landed.
+- **Stage isolation** (`sync-engine.ts`): account insights, post metrics and
+  comments now each run in their own guard. One stage failing degrades only its
+  own data; the others still write. A dead token (which fails every stage) is
+  still detected and rethrown so the connection gets flagged for reconnect and
+  `touchLastSync` is correctly skipped.
+- **Resilient account insights** (`meta-facebook.ts`): the happy path is still a
+  single combined call, but if Graph rejects it, each metric is retried on its
+  own and whatever resolves is kept — a newly-retired metric now costs one field
+  (left at 0, "not measurable"), not every daily row. Only a total failure (dead
+  token / API down) propagates.
+- Note: Signal captures post-level metrics for posts **it published**; a post
+  made directly on the Facebook Page still moves account-level daily reach/
+  engagement, but won't appear as a row in the post table.
+
 ### Added — Planner AI suggestion tab (content ideas + paraphrase)
 
 - **A fourth Composer variant tab, "✦ AI suggestion"**, alongside Shared caption /

@@ -84,47 +84,74 @@ export async function runSync(): Promise<{ connections: number; anomalies: numbe
   return { connections: connections.length, anomalies: anomalyCount };
 }
 
-/** Sync one connection: account daily, post metrics + intent, comments. */
+/**
+ * Sync one connection: account daily, post metrics + intent, comments.
+ *
+ * Each stage is isolated. The three data pulls fail for *independent* reasons —
+ * a deprecated Page metric rejects the whole account-insights call (Meta has
+ * done this repeatedly; see the metric-migration commits), post insights need a
+ * live post, and comment reads sit behind a stricter Advanced-Access gate on
+ * pages_read_engagement. Coupling them meant a single deprecated page metric
+ * wiped out post-level capture *and* skipped touchLastSync, so nothing landed
+ * from an account that was otherwise perfectly readable. Now one stage failing
+ * degrades only its own data; the rest still writes.
+ *
+ * A dead token is the exception — it fails every stage — so an auth error is
+ * remembered and rethrown, letting the caller flag the connection for reconnect.
+ */
 async function syncConnection(conn: Connection): Promise<void> {
   const token = await getDecryptedToken(conn);
   const adapter = getAdapter(conn.platform);
   const now = Date.now();
+  const since = new Date(now - FOURTEEN_DAYS_MS);
+
+  let authError: Error | null = null;
+  const runStage = async (label: string, fn: () => Promise<void>) => {
+    try {
+      await fn();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `${label} failed`;
+      console.error(
+        `[sync] ${label} for connection ${conn.id} (${conn.platform}) failed: ${message}`,
+      );
+      // A dead/expired token fails every stage with an auth error — capture the
+      // first so it can be rethrown to mark the connection, but let the other
+      // stages still try (they simply no-op).
+      if (!authError && err instanceof Error && isAuthError(message)) authError = err;
+    }
+  };
 
   // 1. Account insights → metricsDaily (last 14 days).
-  const range = { from: new Date(now - FOURTEEN_DAYS_MS), to: new Date(now) };
-  const daily = await adapter.fetchAccountInsights(conn, token, range);
-  await Promise.all(
-    daily.map((d) =>
-      upsertDaily({
-        brandId: conn.brandId,
-        workspaceId: conn.workspaceId,
-        platform: conn.platform,
-        date: d.date,
-        followers: d.followers,
-        reach: d.reach,
-        impressions: d.impressions,
-        engagement: d.engagement,
-        profileViews: d.profileViews,
-      }),
-    ),
-  );
+  await runStage("account insights", async () => {
+    const daily = await adapter.fetchAccountInsights(conn, token, {
+      from: since,
+      to: new Date(now),
+    });
+    await Promise.all(
+      daily.map((d) =>
+        upsertDaily({
+          brandId: conn.brandId,
+          workspaceId: conn.workspaceId,
+          platform: conn.platform,
+          date: d.date,
+          followers: d.followers,
+          reach: d.reach,
+          impressions: d.impressions,
+          engagement: d.engagement,
+          profileViews: d.profileViews,
+        }),
+      ),
+    );
+  });
 
   // 2. Post metrics + intent for posts <14 days old.
-  await syncPostMetrics(conn, token, adapter, new Date(now - FOURTEEN_DAYS_MS).toISOString());
+  await runStage("post metrics", () => syncPostMetrics(conn, token, adapter, since.toISOString()));
 
-  // 3. New comments → inbox with sentiment. Isolated in its own try/catch:
-  // reading a Page's feed with nested comments needs Advanced Access on
-  // pages_read_engagement (confirmed via Graph's #10 error even with the
-  // scope genuinely granted on a Page-admin's own token) — a permission gate
-  // that account insights and post metrics don't share. Without this, one
-  // Standard-Access-only feature failing would throw away steps 1-2's
-  // already-successful writes and skip touchLastSync entirely.
-  try {
-    await syncComments(conn, token, adapter, new Date(now - FOURTEEN_DAYS_MS));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Comment sync failed";
-    console.error(`[sync] comments for connection ${conn.id} (${conn.platform}) failed: ${message}`);
-  }
+  // 3. New comments → inbox with sentiment.
+  await runStage("comments", () => syncComments(conn, token, adapter, since));
+
+  // Surface a dead token so runSync marks the connection + skips touchLastSync.
+  if (authError) throw authError;
 }
 
 async function syncPostMetrics(
