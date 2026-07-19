@@ -38,7 +38,7 @@ export default async function ReportsPage() {
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3.5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3.5">
           {reports.map((report) => (
             <ReportCard key={report.id} report={report} />
           ))}

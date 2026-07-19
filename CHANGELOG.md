@@ -4,6 +4,19 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Fixed — Mobile overflow pass (composer tabs, card grids)
+
+- **Composer variant tabs**: with the new fourth "✦ AI suggestion" tab, the four
+  labels overflowed a phone-width modal. The strip now scrolls horizontally
+  (`overflow-x-auto`, non-shrinking tabs) instead of clipping — labels unchanged.
+- **Approvals & Reports card grids**: `minmax(300–320px, 1fr)` auto-fill tracks
+  could exceed a narrow phone's width and force a horizontal scroll. Switched to
+  `minmax(min(100%, Npx), 1fr)` — the track never grows past the viewport, so a
+  single card fills the width cleanly on small screens. Wider layouts unchanged.
+- Audited the other screens: the Analytics and Competitors tables already scroll
+  in their own containers, and the remaining multi-column grids already stack via
+  `sm:`/`lg:` — no page-level horizontal scroll on mobile.
+
 ### Fixed — Planner calendar is mobile-friendly (all 7 days fit)
 
 - The month/week grid forced a `min-w-[560px]`, so on a phone it overflowed and

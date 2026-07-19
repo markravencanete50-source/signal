@@ -342,10 +342,11 @@ export function Composer({
             })}
           </div>
 
-          {/* variant tabs */}
+          {/* variant tabs — four tabs overflow a phone-width modal, so the
+              strip scrolls horizontally rather than clipping or wrapping. */}
           <div
             className={cn(
-              "bg-surface-2 mb-2.5 flex w-fit gap-0.5 rounded-[10px] p-[3px]",
+              "bg-surface-2 mb-2.5 flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-[10px] p-[3px]",
               locked && "hidden",
             )}
           >
@@ -361,7 +362,7 @@ export function Composer({
                 key={key}
                 onClick={() => setTab(key)}
                 className={cn(
-                  "rounded-lg px-3.5 py-1.5 text-[0.8rem] font-semibold",
+                  "shrink-0 rounded-lg px-3.5 py-1.5 text-[0.8rem] font-semibold whitespace-nowrap",
                   tab === key ? "bg-surface text-text-1 shadow-sm" : "text-text-2",
                 )}
               >

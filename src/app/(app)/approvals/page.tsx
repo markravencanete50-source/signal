@@ -48,7 +48,7 @@ export default async function ApprovalsPage() {
       {pending.length === 0 && decided.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3.5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3.5">
           {pending.map((post) => (
             <PendingCard
               key={post.id}
