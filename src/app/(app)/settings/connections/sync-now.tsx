@@ -68,6 +68,14 @@ function SyncOutcome({ result }: { result: SyncNowResult }) {
   }
 
   const allOk = result.connections.every((c) => c.ok);
+  // Reached Facebook fine, but it returned nothing to store — the real state
+  // behind an empty Analytics page, and worth explaining rather than hiding.
+  const syncedButEmpty = result.connections.some(
+    (c) => c.ok && (c.daily ?? 0) === 0 && (c.posts ?? 0) === 0,
+  );
+  const gotData = result.connections.some(
+    (c) => c.ok && ((c.daily ?? 0) > 0 || (c.posts ?? 0) > 0),
+  );
 
   return (
     <div
@@ -82,11 +90,21 @@ function SyncOutcome({ result }: { result: SyncNowResult }) {
         {result.connections.map((c, i) => (
           <li key={`${c.platform}_${i}`} className="leading-relaxed">
             {c.ok ? "✓" : "✗"} {PLATFORM_LABEL[c.platform]} · {c.accountName}
-            {c.ok ? " — up to date" : ` — ${c.error ?? "failed"}`}
+            {c.ok
+              ? ` — ${c.daily ?? 0} days of insights, ${c.posts ?? 0} post metrics`
+              : ` — ${c.error ?? "failed"}`}
           </li>
         ))}
       </ul>
-      {allOk && (
+      {syncedButEmpty && (
+        <p className="mt-1.5 opacity-90">
+          Connected fine, but Facebook returned no data to store. Two common reasons: a Page reports
+          Page-level insights only after it passes Facebook’s follower threshold (≈100 follows), and
+          Signal measures per-post metrics only for posts <strong>published through Signal</strong>{" "}
+          — a post made directly on Facebook won’t show here.
+        </p>
+      )}
+      {gotData && (
         <p className="mt-1.5 opacity-80">
           New numbers show on{" "}
           <a href="/analytics" className="font-semibold underline">

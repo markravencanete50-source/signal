@@ -17,6 +17,12 @@ All notable changes to Signal. Conventional commits; newest first.
   connections, reusing the isolated per-connection sync — never reaches another
   tenant) and a `runSyncNow` server action (admin-only, revalidates Analytics/
   Pulse). Verified end-to-end against the Firestore emulator.
+- **Each sync now reports rows written** (days of insights + post metrics). When
+  a connection syncs cleanly but writes zero of both — the real state behind an
+  empty Analytics page — the UI explains why (Facebook only reports Page insights
+  above its follower threshold; per-post metrics exist only for posts published
+  *through Signal*, not posts made directly on Facebook) instead of showing a
+  bare "up to date".
 
 ### Fixed — Sync captures data even when one Meta metric is deprecated
 

@@ -85,6 +85,13 @@ export async function runSync(): Promise<{ connections: number; anomalies: numbe
   return { connections: connections.length, anomalies: anomalyCount };
 }
 
+/** Rows written per stage in one connection's sync. */
+interface SyncCounts {
+  daily: number;
+  posts: number;
+  comments: number;
+}
+
 /** One connection's result from a manual sync, for the in-app "Run sync now". */
 export interface ManualSyncResult {
   platform: Platform;
@@ -92,6 +99,9 @@ export interface ManualSyncResult {
   ok: boolean;
   error?: string;
   syncedAt?: string;
+  /** Rows written this run — lets the UI distinguish "synced but empty" from a break. */
+  daily?: number;
+  posts?: number;
 }
 
 /**
@@ -111,10 +121,10 @@ export async function syncBrandNow(brandId: string): Promise<ManualSyncResult[]>
   for (const conn of connections) {
     const base = { platform: conn.platform, accountName: conn.accountName };
     try {
-      await syncConnection(conn);
+      const counts = await syncConnection(conn);
       const syncedAt = new Date().toISOString();
       await touchLastSync(conn.id);
-      results.push({ ...base, ok: true, syncedAt });
+      results.push({ ...base, ok: true, syncedAt, daily: counts.daily, posts: counts.posts });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sync failed";
       console.error(
@@ -142,13 +152,20 @@ export async function syncBrandNow(brandId: string): Promise<ManualSyncResult[]>
  *
  * A dead token is the exception — it fails every stage — so an auth error is
  * remembered and rethrown, letting the caller flag the connection for reconnect.
+ *
+ * Returns how many rows each stage wrote. A connection can sync cleanly yet
+ * write zero daily rows — Facebook doesn't report Page insights until a Page
+ * crosses its follower threshold — and that "OK but empty" state is
+ * indistinguishable from a break unless the counts are surfaced. `syncBrandNow`
+ * hands them to the UI so the difference is visible.
  */
-async function syncConnection(conn: Connection): Promise<void> {
+async function syncConnection(conn: Connection): Promise<SyncCounts> {
   const token = await getDecryptedToken(conn);
   const adapter = getAdapter(conn.platform);
   const now = Date.now();
   const since = new Date(now - FOURTEEN_DAYS_MS);
 
+  const counts: SyncCounts = { daily: 0, posts: 0, comments: 0 };
   let authError: Error | null = null;
   const runStage = async (label: string, fn: () => Promise<void>) => {
     try {
@@ -186,16 +203,22 @@ async function syncConnection(conn: Connection): Promise<void> {
         }),
       ),
     );
+    counts.daily = daily.length;
   });
 
   // 2. Post metrics + intent for posts <14 days old.
-  await runStage("post metrics", () => syncPostMetrics(conn, token, adapter, since.toISOString()));
+  await runStage("post metrics", async () => {
+    counts.posts = await syncPostMetrics(conn, token, adapter, since.toISOString());
+  });
 
   // 3. New comments → inbox with sentiment.
-  await runStage("comments", () => syncComments(conn, token, adapter, since));
+  await runStage("comments", async () => {
+    counts.comments = await syncComments(conn, token, adapter, since);
+  });
 
   // Surface a dead token so runSync marks the connection + skips touchLastSync.
   if (authError) throw authError;
+  return counts;
 }
 
 async function syncPostMetrics(
@@ -203,9 +226,10 @@ async function syncPostMetrics(
   token: string,
   adapter: ReturnType<typeof getAdapter>,
   sinceIso: string,
-): Promise<void> {
+): Promise<number> {
   const posts = await listRecentlyPublished(conn.brandId, sinceIso);
   const key = VARIANT_KEY[conn.platform];
+  let written = 0;
 
   // Baseline: the brand's trailing-90-day rate averages, from stored postMetrics.
   const ninetyAgo = new Date(Date.now() - NINETY_DAYS_MS).toISOString();
@@ -247,10 +271,12 @@ async function syncPostMetrics(
         profileClicks: raw.profileClicks,
         intentScore,
       });
+      written++;
     } catch {
       // Skip a single unfetchable post; the rest of the sync continues.
     }
   }
+  return written;
 }
 
 async function syncComments(
@@ -258,9 +284,9 @@ async function syncComments(
   token: string,
   adapter: ReturnType<typeof getAdapter>,
   since: Date,
-): Promise<void> {
+): Promise<number> {
   const raw = await adapter.fetchComments(conn, token, since);
-  if (raw.length === 0) return;
+  if (raw.length === 0) return 0;
 
   // Classify the whole batch in one Claude call.
   const sentiments = await classifySentiments(raw.map((c) => c.text));
@@ -282,6 +308,7 @@ async function syncComments(
       }).catch(() => false),
     ),
   );
+  return raw.length;
 }
 
 /**
