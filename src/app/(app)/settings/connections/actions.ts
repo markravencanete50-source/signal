@@ -8,6 +8,7 @@ import { getAdapter } from "@/adapters/registry";
 import { requireBrandAccess } from "@/lib/auth/dal";
 import { createOAuthState } from "@/lib/auth/oauth-state";
 import { deleteConnection, getConnection } from "@/lib/db/connections";
+import { syncBrandNow, type ManualSyncResult } from "@/lib/sync-engine";
 import { ADMIN_ROLES } from "@/types";
 
 const connectSchema = z.object({
@@ -62,4 +63,36 @@ export async function disconnect(formData: FormData): Promise<void> {
   await deleteConnection(connectionId);
 
   revalidatePath("/settings/connections");
+}
+
+export interface SyncNowResult {
+  ok: boolean;
+  at: string;
+  connections: ManualSyncResult[];
+  error?: string;
+}
+
+/**
+ * Run a sync for this brand's connections right now.
+ *
+ * The in-app counterpart to the hourly cron, for when an admin doesn't want to
+ * wait an hour (or check the GitHub Actions tab) to see whether capture works.
+ * Admin-only and scoped to the brand — `syncBrandNow` never reaches another
+ * tenant. Returns a per-connection summary; revalidates the pages whose data it
+ * refreshes so Analytics reflects the new metrics on the next view.
+ */
+export async function runSyncNow(brandId: string): Promise<SyncNowResult> {
+  await requireBrandAccess(brandId, ADMIN_ROLES);
+
+  const at = new Date().toISOString();
+  try {
+    const connections = await syncBrandNow(brandId);
+    revalidatePath("/settings/connections");
+    revalidatePath("/analytics");
+    revalidatePath("/pulse");
+    return { ok: true, at, connections };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "Sync failed to run.";
+    return { ok: false, at, connections: [], error };
+  }
 }

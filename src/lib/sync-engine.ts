@@ -25,6 +25,7 @@ import { getBrand } from "./db/brands";
 import {
   getDecryptedToken,
   listActiveConnections,
+  listConnectionsForBrand,
   markConnectionError,
   touchLastSync,
 } from "./db/connections";
@@ -82,6 +83,49 @@ export async function runSync(): Promise<{ connections: number; anomalies: numbe
   }
 
   return { connections: connections.length, anomalies: anomalyCount };
+}
+
+/** One connection's result from a manual sync, for the in-app "Run sync now". */
+export interface ManualSyncResult {
+  platform: Platform;
+  accountName: string;
+  ok: boolean;
+  error?: string;
+  syncedAt?: string;
+}
+
+/**
+ * Sync just one brand's connections on demand — the in-app "Run sync now".
+ *
+ * Mirrors runSync's per-connection isolation (a dead token flags that one
+ * connection, the rest still sync) but is scoped to a single brand, so an admin
+ * triggering it can never touch another tenant's data. Anomaly detection is left
+ * to the hourly cron: this action exists to capture fresh metrics and report
+ * what happened, not to re-run cross-brand analysis. Returns a per-connection
+ * summary so the UI can show exactly which account synced and which errored.
+ */
+export async function syncBrandNow(brandId: string): Promise<ManualSyncResult[]> {
+  const connections = await listConnectionsForBrand(brandId);
+  const results: ManualSyncResult[] = [];
+
+  for (const conn of connections) {
+    const base = { platform: conn.platform, accountName: conn.accountName };
+    try {
+      await syncConnection(conn);
+      const syncedAt = new Date().toISOString();
+      await touchLastSync(conn.id);
+      results.push({ ...base, ok: true, syncedAt });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sync failed";
+      console.error(
+        `[sync] manual sync for connection ${conn.id} (${conn.platform}) failed: ${message}`,
+      );
+      if (isAuthError(message)) await markConnectionError(conn.id, message).catch(() => {});
+      results.push({ ...base, ok: false, error: message });
+    }
+  }
+
+  return results;
 }
 
 /**

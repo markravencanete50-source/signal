@@ -6,6 +6,7 @@ import { getAppContext } from "@/lib/workspace-context";
 import { PLATFORM_LABEL, type PublicConnection } from "@/types";
 
 import { ConnectButton, DisconnectButton } from "./connection-buttons";
+import { SyncNowButton } from "./sync-now";
 
 export const metadata = { title: "Connections — Signal" };
 
@@ -76,6 +77,8 @@ export default async function ConnectionsPage({
 
       <h3 className="mb-3 text-[0.95rem] font-semibold">Connected accounts</h3>
 
+      {canManage && connections.length > 0 && <SyncNowButton brandId={activeBrand.id} />}
+
       {connections.length === 0 && (
         <p className="text-text-2 mb-3 text-[0.85rem]">
           No accounts connected yet. Signal can&rsquo;t publish or measure anything until you
@@ -115,6 +118,11 @@ function ConnectionCard({
           {PLATFORM_LABEL[connection.platform]}
           {connection.platform === "ig" ? " Business · linked to FB Page" : " Page"}
           {connection.connectedByName ? ` · connected by ${connection.connectedByName}` : ""}
+        </span>
+        <span className="text-text-2 mt-0.5 block text-[0.72rem]">
+          {connection.lastSyncAt
+            ? `Metrics synced ${checkedAgo(connection.lastSyncAt)}`
+            : "Not synced yet — runs hourly, or use Run sync now"}
         </span>
       </div>
 

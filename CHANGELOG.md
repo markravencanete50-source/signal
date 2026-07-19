@@ -4,6 +4,20 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Added — "Run sync now" + last-synced status (Settings → Connections)
+
+- **An admin-only "Run sync now" button** on the Connections page, so you can
+  trigger a capture and see the result in-app instead of waiting for the hourly
+  cron or checking the GitHub Actions tab. It reports per-connection outcome —
+  which account synced, and the exact error on any that failed — so a dead token
+  or a Meta-side error surfaces immediately rather than as silently missing data.
+- **Each connection now shows when its metrics last synced** ("Metrics synced 2h
+  ago" / "Not synced yet"), making a stalled pipeline obvious at a glance.
+- New `syncBrandNow(brandId)` in the sync engine (scoped to one brand's
+  connections, reusing the isolated per-connection sync — never reaches another
+  tenant) and a `runSyncNow` server action (admin-only, revalidates Analytics/
+  Pulse). Verified end-to-end against the Firestore emulator.
+
 ### Fixed — Sync captures data even when one Meta metric is deprecated
 
 - **The recurring "analytics captured nothing" failure.** Meta keeps retiring
