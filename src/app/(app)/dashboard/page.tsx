@@ -5,12 +5,12 @@ import { IntentRing } from "@/components/ui/intent-ring";
 import { PlusIcon, WarningIcon } from "@/components/ui/icons";
 import { Sparkline } from "@/components/ui/sparkline";
 import { latestAnomaly } from "@/lib/db/anomalies";
-import { listConnectionsForBrand } from "@/lib/db/connections";
+import { listConnectionsForBrand, toPublicConnection } from "@/lib/db/connections";
 import { listDaily, listPostMetrics } from "@/lib/db/metrics";
 import { listPostsInRange } from "@/lib/db/posts";
 import { getAppContext } from "@/lib/workspace-context";
 import { headlineMetrics } from "@/services/analytics";
-import type { Platform } from "@/types";
+import { PLATFORM_LABEL, type Platform, type PublicConnection } from "@/types";
 
 import { LocalGreeting, TodayQueue, type QueueItem } from "./local-time";
 
@@ -60,6 +60,12 @@ export default async function DashboardPage() {
   // directly in a component body.
   const showAnomaly = anomaly && !anomaly.resolvedAt && isFresh(anomaly.detectedAt);
 
+  // Connections that are dead or expiring within the widest warning band — the
+  // token-health monitor's surface on the dashboard.
+  const atRisk = connections
+    .map(toPublicConnection)
+    .filter((c) => c.status !== "active" || c.daysUntilExpiry <= 14);
+
   return (
     <>
       <Header name={firstName} brandName={activeBrand.name} canCompose={canCompose} />
@@ -68,6 +74,13 @@ export default async function DashboardPage() {
         <ConnectPrompt canManage={role === "owner" || role === "admin"} />
       ) : (
         <>
+          {atRisk.length > 0 && (
+            <ConnectionHealthBanner
+              items={atRisk}
+              canManage={role === "owner" || role === "admin"}
+            />
+          )}
+
           {showAnomaly && (
             <div className="bg-warning-soft mb-[22px] flex items-start gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--warning)_30%,transparent)] px-4 py-3.5">
               <WarningIcon className="text-warning mt-px size-[18px] shrink-0" />
@@ -165,6 +178,69 @@ function Header({
       )}
     </div>
   );
+}
+
+/**
+ * Dashboard surface for the token-health monitor. Red when a connection is
+ * already dead (expired/error/expires today), amber when one is merely
+ * approaching its non-refreshable deadline. Everyone sees the warning; only
+ * owner/admin get the reconnect action (Settings is admin-gated).
+ */
+function ConnectionHealthBanner({
+  items,
+  canManage,
+}: {
+  items: PublicConnection[];
+  canManage: boolean;
+}) {
+  const critical = items.some(
+    (c) => c.status === "expired" || c.status === "error" || c.daysUntilExpiry <= 0,
+  );
+  const tone = critical
+    ? {
+        wrap: "bg-danger-soft border-[color-mix(in_srgb,var(--danger)_30%,transparent)]",
+        icon: "text-danger",
+        link: "text-danger",
+      }
+    : {
+        wrap: "bg-warning-soft border-[color-mix(in_srgb,var(--warning)_30%,transparent)]",
+        icon: "text-warning",
+        link: "text-warning",
+      };
+
+  return (
+    <div className={`mb-[22px] flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${tone.wrap}`}>
+      <WarningIcon className={`mt-px size-[18px] shrink-0 ${tone.icon}`} />
+      <div className="flex-1 text-[0.86rem] leading-relaxed">
+        <p className="font-semibold">
+          {critical ? "A connection needs reconnecting" : "A connection expires soon"}
+        </p>
+        <ul className="text-text-2 mt-1 space-y-0.5">
+          {items.map((c) => (
+            <li key={c.id}>
+              <span className="text-text-1 font-medium">{c.accountName}</span> (
+              {PLATFORM_LABEL[c.platform]}) — {healthPhrase(c)}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {canManage && (
+        <Link
+          href="/settings/connections"
+          className={`shrink-0 text-[0.82rem] font-semibold ${tone.link}`}
+        >
+          Reconnect
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function healthPhrase(c: PublicConnection): string {
+  if (c.status === "expired") return "token expired";
+  if (c.status === "error") return c.lastError ?? "connection error";
+  if (c.daysUntilExpiry <= 0) return "expires today";
+  return `expires in ${c.daysUntilExpiry} day${c.daysUntilExpiry === 1 ? "" : "s"}`;
 }
 
 function MetricCard({

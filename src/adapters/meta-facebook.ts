@@ -4,7 +4,13 @@ import { env } from "@/lib/env";
 import type { Connection, PostVariant } from "@/types";
 
 import { validateForPlatform } from "./mock";
-import { exchangeForLongLivedToken, graphFetch, META_SCOPES, redirectUri } from "./meta-client";
+import {
+  checkTokenHealthViaDebug,
+  exchangeForLongLivedToken,
+  graphFetch,
+  META_SCOPES,
+  redirectUri,
+} from "./meta-client";
 import type {
   DateRange,
   InboxRaw,
@@ -13,6 +19,7 @@ import type {
   PublishResult,
   RawDaily,
   RawMetrics,
+  TokenHealth,
   TokenSet,
   ValidatableAsset,
   ValidationResult,
@@ -132,6 +139,10 @@ export const facebookAdapter: PlatformAdapter = {
       pageId: page.id,
       accountName: page.name,
     };
+  },
+
+  checkTokenHealth(_conn: Connection, accessToken: string): Promise<TokenHealth> {
+    return checkTokenHealthViaDebug(accessToken);
   },
 
   async publish(

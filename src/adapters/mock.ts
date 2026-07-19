@@ -8,6 +8,7 @@ import type {
   PublishResult,
   RawDaily,
   RawMetrics,
+  TokenHealth,
   TokenSet,
   ValidatableAsset,
   ValidationResult,
@@ -125,6 +126,21 @@ export function createMockAdapter(platform: Platform): PlatformAdapter {
         pageId: conn.pageId,
         igUserId: conn.igUserId,
         accountName: conn.accountName,
+      };
+    },
+
+    async checkTokenHealth(conn: Connection): Promise<TokenHealth> {
+      await latency(conn.id);
+      // Mirror the stored expiry so the health monitor + UI behave realistically
+      // in mock mode: valid while the stored token is in the future, with a
+      // synthetic 90-day data-access window on top.
+      const tokenMs = new Date(conn.tokenExpiresAt).getTime();
+      return {
+        isValid: tokenMs > Date.now(),
+        expiresAt: tokenMs,
+        dataAccessExpiresAt: tokenMs + 30 * 86_400_000,
+        scopes: conn.scopes ?? [],
+        error: tokenMs > Date.now() ? undefined : "Mock token expired.",
       };
     },
 

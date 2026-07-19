@@ -31,6 +31,26 @@ export interface TokenSet {
   authorizingUserId?: string;
 }
 
+/**
+ * Live token status from the platform (Meta's `/debug_token`).
+ *
+ * Timestamps are ms since epoch, or null for "never expires" / unknown — Meta
+ * reports a non-expiring token as 0, which this normalises to null so callers
+ * treat it as "no deadline" rather than "expired in 1970".
+ */
+export interface TokenHealth {
+  /** Whether the token is currently usable at all. */
+  isValid: boolean;
+  /** When the access token itself expires (refreshable), or null. */
+  expiresAt: number | null;
+  /** When the user's data-access grant expires — NOT refreshable, needs reconnect. */
+  dataAccessExpiresAt: number | null;
+  /** Scopes currently attached to the token, for drift detection. */
+  scopes: string[];
+  /** Platform's reason when `isValid` is false. */
+  error?: string;
+}
+
 export interface PublishResult {
   externalId: string;
   permalink: string;
@@ -127,6 +147,14 @@ export interface PlatformAdapter {
   exchangeCode(code: string): Promise<TokenSet>;
 
   refreshToken(conn: Connection, accessToken: string): Promise<TokenSet>;
+
+  /**
+   * Live token status for the health monitor. Must resolve `isValid: false`
+   * (rather than throw) for a dead token, so the caller can react; a transient
+   * failure (network, rate limit) should still throw so it's retried, not
+   * mistaken for a revoked token.
+   */
+  checkTokenHealth(conn: Connection, accessToken: string): Promise<TokenHealth>;
 
   publish(conn: Connection, accessToken: string, variant: PostVariant): Promise<PublishResult>;
 

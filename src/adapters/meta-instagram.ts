@@ -4,7 +4,13 @@ import { env } from "@/lib/env";
 import type { Connection, PostVariant } from "@/types";
 
 import { validateForPlatform } from "./mock";
-import { exchangeForLongLivedToken, graphFetch, META_SCOPES, redirectUri } from "./meta-client";
+import {
+  checkTokenHealthViaDebug,
+  exchangeForLongLivedToken,
+  graphFetch,
+  META_SCOPES,
+  redirectUri,
+} from "./meta-client";
 import type {
   DateRange,
   InboxRaw,
@@ -13,6 +19,7 @@ import type {
   PublishResult,
   RawDaily,
   RawMetrics,
+  TokenHealth,
   TokenSet,
   ValidatableAsset,
   ValidationResult,
@@ -175,6 +182,10 @@ export const instagramAdapter: PlatformAdapter = {
       igUserId: page.instagram_business_account?.id ?? conn.igUserId,
       accountName: conn.accountName,
     };
+  },
+
+  checkTokenHealth(_conn: Connection, accessToken: string): Promise<TokenHealth> {
+    return checkTokenHealthViaDebug(accessToken);
   },
 
   async publish(

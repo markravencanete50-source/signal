@@ -2,6 +2,8 @@ import "server-only";
 
 import { env } from "@/lib/env";
 
+import type { TokenHealth } from "./types";
+
 /**
  * Shared Meta Graph API plumbing for the FB + IG adapters.
  *
@@ -179,4 +181,67 @@ export async function exchangeForLongLivedToken(
 /** OAuth redirect URI. Must byte-match a URI whitelisted in the Meta app config. */
 export function redirectUri(): string {
   return `${env().APP_URL}/api/auth/meta/callback`;
+}
+
+/**
+ * Live token status via Graph `/debug_token`.
+ *
+ * Authenticated with the app token (`{app-id}|{app-secret}`) inspecting the
+ * user/page token as `input_token` — the sanctioned way to read a token's real
+ * validity and both expiry clocks straight from Meta, rather than trusting the
+ * estimate we stored at connect time. Graph reports seconds; 0 means "never
+ * expires", normalised to null.
+ *
+ * A dead token still returns HTTP 200 with `is_valid: false`, so this resolves
+ * (never throws) for that case — but a malformed/oversized token can 400/190,
+ * which `checkTokenHealthViaDebug` maps to `isValid: false`. Anything else
+ * (rate limit, 5xx) propagates so the caller retries instead of falsely
+ * declaring the token dead.
+ */
+async function debugToken(userAccessToken: string): Promise<TokenHealth> {
+  const { META_APP_ID, META_APP_SECRET } = env();
+  const appToken = `${META_APP_ID}|${META_APP_SECRET}`;
+
+  const res = await graphFetch<{
+    data?: {
+      is_valid?: boolean;
+      expires_at?: number;
+      data_access_expires_at?: number;
+      scopes?: string[];
+      error?: { message?: string };
+    };
+  }>("/debug_token", { accessToken: appToken, params: { input_token: userAccessToken } });
+
+  const d = res.data ?? {};
+  const toMs = (secs?: number) => (typeof secs === "number" && secs > 0 ? secs * 1000 : null);
+
+  return {
+    isValid: d.is_valid === true,
+    expiresAt: toMs(d.expires_at),
+    dataAccessExpiresAt: toMs(d.data_access_expires_at),
+    scopes: d.scopes ?? [],
+    error: d.error?.message,
+  };
+}
+
+/**
+ * Adapter-facing wrapper: identical for FB and IG (both are Graph tokens), so
+ * both adapters delegate here. Turns an auth-class Graph error into a clean
+ * `isValid: false` result; leaves transient errors to propagate.
+ */
+export async function checkTokenHealthViaDebug(userAccessToken: string): Promise<TokenHealth> {
+  try {
+    return await debugToken(userAccessToken);
+  } catch (err) {
+    if (err instanceof GraphError && err.isAuthError) {
+      return {
+        isValid: false,
+        expiresAt: null,
+        dataAccessExpiresAt: null,
+        scopes: [],
+        error: err.message,
+      };
+    }
+    throw err;
+  }
 }

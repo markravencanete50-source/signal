@@ -4,6 +4,27 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Added — Token health monitor (proactive expiry warnings)
+
+- **The category's #1 unmet need** (per the competitor research in
+  `docs/competitor-research-2026-07.md`): tokens die silently and users only find
+  out when the queue fails. Signal now warns *before* that happens.
+- **Ground-truth from Meta.** New `checkTokenHealth` adapter method calls Graph
+  `/debug_token` (shared `checkTokenHealthViaDebug` in `meta-client.ts`) to read
+  a token's real validity plus both expiry clocks — the access token (~60d,
+  refreshable) and the data-access grant (~90d, which a refresh CANNOT extend,
+  only a reconnect can). More accurate than the estimate stored at connect time.
+- **Graduated, deduped warnings.** `services/token-health.ts` (pure, unit-tested)
+  computes the effective deadline and fires one notification per band (14/7/3/1
+  days). `lib/token-health.ts` monitor: marks a revoked/invalid token `expired`
+  immediately, records Meta's real data-access deadline, and notifies workspace
+  admins. Runs in `/api/cron/tokens` **after** the refresh pass, so a
+  still-refreshable token is renewed before it would ever warn.
+- **Surfaced everywhere it matters.** Dashboard banner (red for dead, amber for
+  expiring) listing the at-risk accounts; Settings connection card shows the true
+  effective deadline plus a "checked Nh ago" line; `PublicConnection.daysUntilExpiry`
+  now reflects the soonest of the two clocks. +10 unit tests (98 total).
+
 ### Fixed — "Publish now" is now synchronous (posts no longer silently go nowhere)
 
 - **Root cause of the vanished post:** "Publish now" only scheduled the post for

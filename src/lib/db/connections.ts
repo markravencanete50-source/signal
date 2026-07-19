@@ -5,6 +5,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { TokenSet } from "@/adapters/types";
 import type { Connection, ConnectionStatus, Platform, PublicConnection } from "@/types";
 
+import { effectiveExpiryMs } from "@/services/token-health";
+
 import { decryptToken, encryptToken } from "../crypto";
 import { adminDb } from "../firebase-admin";
 
@@ -31,8 +33,12 @@ function docToConnection(id: string, data: FirebaseFirestore.DocumentData): Conn
  * publish it automatically. This one keeps it out by default.
  */
 export function toPublicConnection(conn: Connection): PublicConnection {
-  const expiresAt = new Date(conn.tokenExpiresAt);
-  const daysUntilExpiry = Math.floor((expiresAt.getTime() - Date.now()) / 86_400_000);
+  const tokenMs = new Date(conn.tokenExpiresAt).getTime();
+  const dataMs = conn.dataAccessExpiresAt ? new Date(conn.dataAccessExpiresAt).getTime() : null;
+  // Show the soonest real deadline: a token refresh keeps the token alive but
+  // can't extend data-access, so whichever binds first is the one to surface.
+  const effMs = effectiveExpiryMs(tokenMs, dataMs) ?? tokenMs;
+  const daysUntilExpiry = Math.floor((effMs - Date.now()) / 86_400_000);
 
   return {
     id: conn.id,
@@ -45,6 +51,7 @@ export function toPublicConnection(conn: Connection): PublicConnection {
     lastError: conn.lastError,
     connectedByName: conn.connectedByName,
     daysUntilExpiry,
+    tokenHealthCheckedAt: conn.tokenHealthCheckedAt,
   };
 }
 
@@ -158,7 +165,34 @@ export async function updateConnectionToken(id: string, tokens: TokenSet): Promi
       // Clear the field rather than writing null: `lastError` is optional, and a
       // null would render as a phantom error on the health card.
       lastError: FieldValue.delete(),
+      // A fresh token resets the warning cycle — the next health check re-arms
+      // the bands off the new expiry.
+      expiryWarnedThreshold: FieldValue.delete(),
     });
+}
+
+/**
+ * Record a token-health check result: the last-checked time and Meta's real
+ * data-access expiry (when present). Written by the token-health monitor after
+ * a successful `/debug_token` validation.
+ */
+export async function recordTokenHealth(
+  id: string,
+  data: { checkedAt: string; dataAccessExpiresAt?: string },
+): Promise<void> {
+  const update: Record<string, unknown> = { tokenHealthCheckedAt: data.checkedAt };
+  if (data.dataAccessExpiresAt) update.dataAccessExpiresAt = data.dataAccessExpiresAt;
+  await adminDb().doc(`${COLLECTION}/${id}`).update(update);
+}
+
+/** Remember the strictest expiry-warning band already sent, so it fires once. */
+export async function setExpiryWarnedThreshold(id: string, threshold: number): Promise<void> {
+  await adminDb().doc(`${COLLECTION}/${id}`).update({ expiryWarnedThreshold: threshold });
+}
+
+/** Reset the warning cycle once a connection is comfortably far from expiry. */
+export async function clearExpiryWarnedThreshold(id: string): Promise<void> {
+  await adminDb().doc(`${COLLECTION}/${id}`).update({ expiryWarnedThreshold: FieldValue.delete() });
 }
 
 export async function markConnectionError(id: string, error: string): Promise<void> {

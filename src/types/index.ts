@@ -177,6 +177,18 @@ export interface Connection {
    * time; used by the deauthorize / data-deletion callbacks to locate the row.
    */
   metaUserId?: string;
+  /**
+   * Meta's data-access expiry (from `/debug_token`) — the reconnect deadline a
+   * token refresh CANNOT extend. Written by the token-health monitor.
+   */
+  dataAccessExpiresAt?: string;
+  /** When the token-health monitor last validated this connection with Meta. */
+  tokenHealthCheckedAt?: string;
+  /**
+   * Smallest expiry-warning band (days) already sent to admins, so each band
+   * fires once. Cleared on refresh/reconnect. See services/token-health.
+   */
+  expiryWarnedThreshold?: number;
 }
 
 /**
@@ -196,8 +208,13 @@ export interface PublicConnection {
   lastSyncAt?: string;
   lastError?: string;
   connectedByName?: string;
-  /** Derived server-side so the UI never does token maths. */
+  /**
+   * Derived server-side so the UI never does token maths — days until the
+   * *effective* deadline (soonest of token expiry and data-access expiry).
+   */
   daysUntilExpiry: number;
+  /** When the health monitor last validated this connection with Meta, if ever. */
+  tokenHealthCheckedAt?: string;
 }
 
 // ---------------------------------------------------------------------------

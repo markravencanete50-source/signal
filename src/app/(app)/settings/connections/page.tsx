@@ -118,16 +118,23 @@ function ConnectionCard({
         </span>
       </div>
 
-      <span
-        className={`flex items-center gap-1.5 text-[0.76rem] font-semibold ${health.className}`}
-      >
+      <div className="flex flex-col items-end gap-0.5">
         <span
-          className="size-2 shrink-0 rounded-full"
-          style={{ background: health.dot }}
-          aria-hidden="true"
-        />
-        {health.label}
-      </span>
+          className={`flex items-center gap-1.5 text-[0.76rem] font-semibold ${health.className}`}
+        >
+          <span
+            className="size-2 shrink-0 rounded-full"
+            style={{ background: health.dot }}
+            aria-hidden="true"
+          />
+          {health.label}
+        </span>
+        {connection.tokenHealthCheckedAt && (
+          <span className="text-text-2 text-[0.68rem]">
+            checked {checkedAgo(connection.tokenHealthCheckedAt)}
+          </span>
+        )}
+      </div>
 
       {canManage && (
         <DisconnectButton connectionId={connection.id} accountName={connection.accountName} />
@@ -165,6 +172,17 @@ function describeHealth(conn: PublicConnection): { label: string; className: str
     className: "text-success",
     dot: "var(--success)",
   };
+}
+
+/** Compact "checked 3h ago" relative time for the health monitor's last run. */
+function checkedAgo(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function EmptyState({
