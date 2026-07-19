@@ -190,7 +190,9 @@ export function PlannerCalendar({
             <div className="overflow-x-auto">
               <div
                 className={cn(
-                  "border-border bg-surface min-w-[560px] overflow-hidden rounded-2xl border",
+                  // No min-width on mobile so all 7 columns fit the viewport
+                  // (Sat/Sun were scrolling off-screen); roomier from sm up.
+                  "border-border bg-surface overflow-hidden rounded-2xl border sm:min-w-[560px]",
                   busy && "opacity-70",
                 )}
               >
@@ -198,9 +200,10 @@ export function PlannerCalendar({
                   {WEEKDAYS.map((d) => (
                     <span
                       key={d}
-                      className="text-text-2 p-2.5 text-center text-[0.7rem] font-semibold tracking-[0.06em] uppercase"
+                      className="text-text-2 p-1.5 text-center text-[0.62rem] font-semibold tracking-[0.04em] uppercase sm:p-2.5 sm:text-[0.7rem] sm:tracking-[0.06em]"
                     >
-                      {d}
+                      <span className="sm:hidden">{d.charAt(0)}</span>
+                      <span className="hidden sm:inline">{d}</span>
                     </span>
                   ))}
                 </div>
@@ -219,8 +222,10 @@ export function PlannerCalendar({
                         }}
                         onDrop={() => dragId && drop(cell.key, dragId)}
                         className={cn(
-                          "border-border border-r border-b p-[7px] text-[0.76rem] [&:nth-child(7n)]:border-r-0",
-                          view === "month" ? "min-h-[96px]" : "min-h-[220px]",
+                          "border-border border-r border-b p-1 text-[0.76rem] sm:p-[7px] [&:nth-child(7n)]:border-r-0",
+                          view === "month"
+                            ? "min-h-[72px] sm:min-h-[96px]"
+                            : "min-h-[150px] sm:min-h-[220px]",
                           !cell.inMonth && "bg-surface-2 opacity-50",
                         )}
                       >

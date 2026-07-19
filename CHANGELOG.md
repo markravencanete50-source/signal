@@ -4,6 +4,15 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Fixed — Planner calendar is mobile-friendly (all 7 days fit)
+
+- The month/week grid forced a `min-w-[560px]`, so on a phone it overflowed and
+  **Saturday and Sunday scrolled off-screen** (only Mon–Fri visible) with no
+  affordance. The min-width is now `sm:` only — on mobile the 7-column grid fits
+  the viewport, so every day shows. Weekday headers shorten to single letters,
+  and cell padding/height tighten below `sm` so compact columns aren't awkward.
+  Roomy layout (and the horizontal-scroll fallback) is unchanged from `sm` up.
+
 ### Added — "Run sync now" + last-synced status (Settings → Connections)
 
 - **An admin-only "Run sync now" button** on the Connections page, so you can
