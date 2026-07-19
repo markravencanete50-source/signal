@@ -4,6 +4,26 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Added — Verify-after-publish (catches the silent-vanish failure)
+
+- **The publish half no mainstream tool does** (from `docs/competitor-research-2026-07.md`,
+  the category's #1 reliability complaint): Meta *accepting* a publish isn't proof
+  the post *appeared*. A few minutes after every successful publish, Signal now
+  re-fetches the post from Meta by its id to confirm it genuinely exists.
+- New `verifyPublished` adapter method (`GET /{id}?fields=id`, shared helper in
+  `meta-client.ts`); mock always confirms so demo mode stays quiet. Only Meta
+  *explicitly* reporting the object gone (404 / code 100 subcode 33) counts as
+  missing — rate-limits/5xx/dead-token are `transient` and retried, so a blip
+  never raises a false alarm.
+- `services/publish-verify.ts` (pure, 4 unit tests): 3-minute post-publish delay,
+  5m/15m transient backoff, give-up cap. `lib/publish-verify.ts` engine +
+  `/api/cron/verify` (on the same every-5-min tick as publish): confirms present
+  posts, **alerts admins when one is missing** (state `missing`), retries then
+  marks `unverified` when it can't reach Meta. New `posts.verification` field +
+  composite index; the Planner chip shows a red "not found" marker on a missing
+  post. Complements the existing retry pipeline (which handles *failed*
+  publishes; this handles *claimed-successful* ones).
+
 ### Added — Token health monitor (proactive expiry warnings)
 
 - **The category's #1 unmet need** (per the competitor research in

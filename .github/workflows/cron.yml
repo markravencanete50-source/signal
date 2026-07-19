@@ -36,7 +36,7 @@ on:
         required: true
         default: publish
         type: choice
-        options: [publish, sync, tokens, digest, autolists, competitors]
+        options: [publish, verify, sync, tokens, digest, autolists, competitors]
 
 # Never let two runs of the same schedule overlap; skip rather than pile up.
 concurrency:
@@ -62,8 +62,8 @@ jobs:
 
           # Map the firing trigger to the endpoint(s) it should hit.
           case "${{ github.event.schedule }}" in
-            "*/5 * * * *") endpoints="publish" ;;
-            "0 * * * *")   endpoints="publish sync autolists" ;;
+            "*/5 * * * *") endpoints="publish verify" ;;
+            "0 * * * *")   endpoints="publish verify sync autolists" ;;
             "0 3 * * *")   endpoints="tokens" ;;
             "0 8 * * *")   endpoints="digest" ;;
             "30 4 * * *")  endpoints="competitors" ;;

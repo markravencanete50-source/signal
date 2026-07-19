@@ -2,7 +2,7 @@ import "server-only";
 
 import { env } from "@/lib/env";
 
-import type { TokenHealth } from "./types";
+import type { TokenHealth, VerifyOutcome } from "./types";
 
 /**
  * Shared Meta Graph API plumbing for the FB + IG adapters.
@@ -181,6 +181,39 @@ export async function exchangeForLongLivedToken(
 /** OAuth redirect URI. Must byte-match a URI whitelisted in the Meta app config. */
 export function redirectUri(): string {
   return `${env().APP_URL}/api/auth/meta/callback`;
+}
+
+/**
+ * Confirm a published FB post / IG media object still exists, by id — shared by
+ * both adapters (a bare `GET /{id}?fields=id` works for both). The verify pass
+ * uses this to catch a publish that Meta accepted but that never actually
+ * appeared.
+ *
+ * Only Meta *explicitly* saying the object is gone (404, or code 100 /
+ * subcode 33 "does not exist") counts as missing — everything else (rate limit,
+ * 5xx, a dead token that can't read it) is `transient`, so a blip never
+ * masquerades as a vanished post.
+ */
+export async function verifyPublishedViaGraph(
+  accessToken: string,
+  externalId: string,
+): Promise<VerifyOutcome> {
+  try {
+    await graphFetch<{ id: string }>(`/${externalId}`, { accessToken, params: { fields: "id" } });
+    return { exists: true, transient: false };
+  } catch (err) {
+    if (err instanceof GraphError) {
+      const definitelyGone = err.status === 404 || (err.code === 100 && err.subcode === 33);
+      return definitelyGone
+        ? { exists: false, transient: false, detail: err.message }
+        : { exists: false, transient: true, detail: err.message };
+    }
+    return {
+      exists: false,
+      transient: true,
+      detail: err instanceof Error ? err.message : "Verification request failed.",
+    };
+  }
 }
 
 /**

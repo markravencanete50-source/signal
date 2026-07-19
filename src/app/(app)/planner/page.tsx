@@ -56,6 +56,9 @@ export default async function PlannerPage({
         status: p.status,
         platforms,
         label,
+        // Verify-after-publish flagged this "published" post as gone from the
+        // platform — surfaced as a warning marker on the chip.
+        verifyMissing: p.verification?.state === "missing",
       };
     });
 

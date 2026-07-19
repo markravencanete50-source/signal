@@ -10,6 +10,7 @@ import {
   graphFetch,
   META_SCOPES,
   redirectUri,
+  verifyPublishedViaGraph,
 } from "./meta-client";
 import type {
   DateRange,
@@ -23,6 +24,7 @@ import type {
   TokenSet,
   ValidatableAsset,
   ValidationResult,
+  VerifyOutcome,
 } from "./types";
 
 /**
@@ -143,6 +145,14 @@ export const facebookAdapter: PlatformAdapter = {
 
   checkTokenHealth(_conn: Connection, accessToken: string): Promise<TokenHealth> {
     return checkTokenHealthViaDebug(accessToken);
+  },
+
+  verifyPublished(
+    _conn: Connection,
+    accessToken: string,
+    externalId: string,
+  ): Promise<VerifyOutcome> {
+    return verifyPublishedViaGraph(accessToken, externalId);
   },
 
   async publish(

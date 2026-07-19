@@ -51,6 +51,19 @@ export interface TokenHealth {
   error?: string;
 }
 
+/**
+ * Result of re-checking whether a just-published post still exists on the
+ * platform. `transient: true` means we couldn't determine existence (rate
+ * limit, 5xx, dead token) — the caller should retry rather than declare the
+ * post missing and alarm the user.
+ */
+export interface VerifyOutcome {
+  exists: boolean;
+  transient: boolean;
+  /** Platform's note, useful when a post is genuinely missing. */
+  detail?: string;
+}
+
 export interface PublishResult {
   externalId: string;
   permalink: string;
@@ -157,6 +170,19 @@ export interface PlatformAdapter {
   checkTokenHealth(conn: Connection, accessToken: string): Promise<TokenHealth>;
 
   publish(conn: Connection, accessToken: string, variant: PostVariant): Promise<PublishResult>;
+
+  /**
+   * Confirm a previously-published post still exists on the platform, by id.
+   * Used by the verify-after-publish pass to catch a "success" that silently
+   * never appeared. Must resolve `transient: true` (not throw) when it simply
+   * can't reach the platform, so a network blip isn't mistaken for a vanished
+   * post.
+   */
+  verifyPublished(
+    conn: Connection,
+    accessToken: string,
+    externalId: string,
+  ): Promise<VerifyOutcome>;
 
   /**
    * Edit the caption of an already-published post, where the platform allows

@@ -12,6 +12,7 @@ import type {
   TokenSet,
   ValidatableAsset,
   ValidationResult,
+  VerifyOutcome,
 } from "./types";
 
 /**
@@ -142,6 +143,13 @@ export function createMockAdapter(platform: Platform): PlatformAdapter {
         scopes: conn.scopes ?? [],
         error: tokenMs > Date.now() ? undefined : "Mock token expired.",
       };
+    },
+
+    async verifyPublished(conn: Connection): Promise<VerifyOutcome> {
+      await latency(conn.id);
+      // Mock publishes always "exist" — the verify path is exercised without
+      // manufacturing phantom missing-post alerts in demo mode.
+      return { exists: true, transient: false };
     },
 
     async publish(

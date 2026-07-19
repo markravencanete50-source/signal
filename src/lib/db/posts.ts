@@ -2,6 +2,8 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { verifyDueAt } from "@/services/publish-verify";
+
 import { adminDb } from "../firebase-admin";
 import type { Post, PostStatus, PostVariants, VariantKey } from "@/types";
 
@@ -236,18 +238,87 @@ export async function claimPostById(id: string): Promise<Post | null> {
   }
 }
 
-/** Mark a post published, recording each platform's external id + permalink. */
+/**
+ * Mark a post published, recording each platform's external id + permalink, and
+ * arm the verify-after-publish check. `verification.pending` with a `dueAt` a
+ * few minutes out means the verify cron will re-fetch the post from Meta to
+ * confirm it actually appeared.
+ */
 export async function markPublished(
   id: string,
   results: Partial<Record<VariantKey, { externalId?: string; permalink?: string; error?: string }>>,
 ): Promise<void> {
+  const now = new Date();
   await adminDb()
     .doc(`${COLLECTION}/${id}`)
     .update({
       status: "published" satisfies PostStatus,
-      publishedAt: new Date().toISOString(),
+      publishedAt: now.toISOString(),
       results,
+      verification: { state: "pending", dueAt: verifyDueAt(now.getTime()), attempts: 0 },
     });
+}
+
+/**
+ * Posts whose verify check is due — `verification.state == "pending"` and
+ * `verification.dueAt <= now`. The verify cron's work list. Uses the
+ * (verification.state, verification.dueAt) composite index.
+ */
+export async function listPostsAwaitingVerification(nowIso: string, limit = 25): Promise<Post[]> {
+  const snap = await adminDb()
+    .collection(COLLECTION)
+    .where("verification.state", "==", "pending")
+    .where("verification.dueAt", "<=", nowIso)
+    .orderBy("verification.dueAt", "asc")
+    .limit(limit)
+    .get();
+  return snap.docs.map((d) => docToPost(d.id, d.data()));
+}
+
+/** The post was confirmed present on every platform it published to. */
+export async function markVerificationConfirmed(id: string, checkedAt: string): Promise<void> {
+  await adminDb().doc(`${COLLECTION}/${id}`).update({
+    "verification.state": "confirmed",
+    "verification.checkedAt": checkedAt,
+  });
+}
+
+/** The platform says the post is gone — admins get alerted alongside this. */
+export async function markVerificationMissing(
+  id: string,
+  checkedAt: string,
+  detail: string,
+): Promise<void> {
+  await adminDb().doc(`${COLLECTION}/${id}`).update({
+    "verification.state": "missing",
+    "verification.checkedAt": checkedAt,
+    "verification.detail": detail,
+  });
+}
+
+/** Couldn't reach the platform after retries — recorded quietly, no alarm. */
+export async function markVerificationUnverified(
+  id: string,
+  checkedAt: string,
+  detail: string,
+): Promise<void> {
+  await adminDb().doc(`${COLLECTION}/${id}`).update({
+    "verification.state": "unverified",
+    "verification.checkedAt": checkedAt,
+    "verification.detail": detail,
+  });
+}
+
+/** Push the next verify check out and bump the transient-attempt counter. */
+export async function rescheduleVerification(
+  id: string,
+  dueAt: string,
+  attempts: number,
+): Promise<void> {
+  await adminDb().doc(`${COLLECTION}/${id}`).update({
+    "verification.dueAt": dueAt,
+    "verification.attempts": attempts,
+  });
 }
 
 /**

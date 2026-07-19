@@ -42,6 +42,14 @@
       ]
     },
     {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "verification.state", "order": "ASCENDING" },
+        { "fieldPath": "verification.dueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "inboxItems",
       "queryScope": "COLLECTION",
       "fields": [

@@ -263,6 +263,24 @@ export interface Post {
     note?: string;
   };
   results?: Partial<Record<VariantKey, PublishResultEntry>>;
+  /**
+   * Verify-after-publish state. Seeded `pending` the moment a post publishes,
+   * then resolved by the verify pass a few minutes later:
+   *   confirmed  — the post still exists on the platform,
+   *   missing    — the platform says it's gone → admins alerted,
+   *   unverified — couldn't reach the platform after retries (no alarm).
+   */
+  verification?: {
+    state: "pending" | "confirmed" | "missing" | "unverified";
+    /** When the next existence check is due. */
+    dueAt: string;
+    /** When it was last checked. */
+    checkedAt?: string;
+    /** Transient-failure attempts so far, for the retry cap. */
+    attempts: number;
+    /** Human note, set when missing or unverified. */
+    detail?: string;
+  };
   aiMeta?: {
     suggested: boolean;
     predictedScore?: number;

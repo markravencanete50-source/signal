@@ -27,6 +27,8 @@ export interface CalendarPost {
   status: PostStatus;
   platforms: Platform[];
   label: string;
+  /** Verify-after-publish couldn't find this published post on the platform. */
+  verifyMissing?: boolean;
 }
 
 export type CalendarView = "month" | "week" | "day";
@@ -292,6 +294,13 @@ function PostChip({
         isMovable(post.status) ? "cursor-grab" : "cursor-pointer",
       )}
     >
+      {post.verifyMissing && (
+        <span
+          className="bg-danger size-1.5 shrink-0 rounded-full"
+          aria-label="Not found on platform"
+          title="Published, but Signal couldn't find this post on the platform"
+        />
+      )}
       {showTime && <span className="shrink-0 opacity-75">{time}</span>}
       <span className="truncate">{post.label}</span>
     </button>
@@ -334,6 +343,11 @@ function DayAgenda({
             >
               {post.status.replace("_", " ")}
             </span>
+            {post.verifyMissing && (
+              <span className="bg-danger-soft text-danger shrink-0 rounded-[7px] px-2 py-0.5 text-[0.68rem] font-bold">
+                not found
+              </span>
+            )}
             <span className="flex-1 truncate text-[0.88rem]">{post.label}</span>
           </button>
         ))
