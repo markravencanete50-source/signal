@@ -1,11 +1,14 @@
+import type { ReactNode } from "react";
+
 import { Card, CardTitle } from "@/components/ui/card";
 import { IntentRing } from "@/components/ui/intent-ring";
 import { PlatformIcon } from "@/components/ui/platform-icon";
 import { ReachChart } from "@/components/charts/reach-chart";
+import { listConnectionsForBrand, toPublicConnection } from "@/lib/db/connections";
 import { listDaily, listPostMetrics } from "@/lib/db/metrics";
 import { getAppContext } from "@/lib/workspace-context";
 import { intentByFormat, reachEngagementSeries, reachSplit } from "@/services/analytics";
-import type { Platform } from "@/types";
+import { PLATFORM_LABEL, type Platform, type PublicConnection } from "@/types";
 
 export const metadata = { title: "Analytics — Signal" };
 
@@ -76,9 +79,8 @@ export default async function AnalyticsPage({
       </div>
 
       {!hasData ? (
-        <Empty
-          title="No metrics yet"
-          body="Analytics fills in after the first hourly sync of a connected account. Connect an account and publish, then check back."
+        <NoMetrics
+          connections={(await listConnectionsForBrand(activeBrand.id)).map(toPublicConnection)}
         />
       ) : (
         <>
@@ -238,4 +240,95 @@ function Empty({ title, body }: { title: string; body: string }) {
       </div>
     </>
   );
+}
+
+/**
+ * Empty-analytics diagnosis, derived from the brand's connections.
+ *
+ * "No metrics yet" has three very different causes, and the old blanket copy hid
+ * which one you're in. We already know the page has no data; pairing that with
+ * each connection's sync status tells the real story: nothing connected, synced-
+ * but-Facebook-returned-nothing (the follower-threshold / posted-outside-Signal
+ * case), or simply never synced. Each gets its own copy and CTA.
+ */
+function NoMetrics({ connections }: { connections: PublicConnection[] }) {
+  const connected = connections.length > 0;
+  const lastSync = connections
+    .map((c) => c.lastSyncAt)
+    .filter((s): s is string => Boolean(s))
+    .sort()
+    .at(-1);
+
+  let title: string;
+  let body: ReactNode;
+  let cta: { href: string; label: string };
+
+  if (!connected) {
+    title = "No account connected";
+    body = "Signal can’t measure anything until you connect a Facebook Page or Instagram account.";
+    cta = { href: "/settings/connections", label: "Connect an account" };
+  } else if (!lastSync) {
+    title = "Waiting for the first sync";
+    body =
+      "This account is connected but hasn’t synced yet. Sync runs hourly — or trigger it now and watch the result.";
+    cta = { href: "/settings/connections", label: "Run sync now" };
+  } else {
+    title = "Connected, but no data returned yet";
+    body = (
+      <>
+        Last synced {syncedAgo(lastSync)}, but Facebook returned nothing to store. Two common
+        reasons: a Page reports Page-level insights only after it passes Facebook’s follower
+        threshold (≈100 follows), and Signal measures per-post metrics only for posts{" "}
+        <strong className="text-text-1">published through Signal</strong> — a post made directly on
+        Facebook won’t show here. Run a sync to see the exact per-account counts.
+      </>
+    );
+    cta = { href: "/settings/connections", label: "Run sync now" };
+  }
+
+  return (
+    <>
+      <div className="mb-[22px]">
+        <h1 className="text-[1.5rem] font-bold tracking-[-0.02em]">Analytics</h1>
+      </div>
+
+      {connected && (
+        <div className="mb-3.5 flex flex-wrap gap-2">
+          {connections.map((c) => (
+            <span
+              key={c.id}
+              className="border-border bg-surface text-text-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[0.76rem] font-medium"
+            >
+              <PlatformIcon platform={c.platform} size={16} />
+              {PLATFORM_LABEL[c.platform]} ·{" "}
+              {c.lastSyncAt ? `synced ${syncedAgo(c.lastSyncAt)}` : "not synced yet"}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="border-border grid min-h-[240px] place-items-center rounded-2xl border-[1.5px] border-dashed p-8 text-center">
+        <div className="max-w-[440px]">
+          <p className="text-[0.95rem] font-semibold">{title}</p>
+          <p className="text-text-2 mt-1.5 text-[0.85rem] leading-relaxed">{body}</p>
+          <a
+            href={cta.href}
+            className="bg-accent text-accent-fg mt-4 inline-flex items-center rounded-[10px] px-4 py-[9px] text-[0.88rem] font-semibold"
+          >
+            {cta.label}
+          </a>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Compact "just now / 2h ago" for a last-sync timestamp. */
+function syncedAgo(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }

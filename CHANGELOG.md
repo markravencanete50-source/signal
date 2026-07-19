@@ -23,6 +23,13 @@ All notable changes to Signal. Conventional commits; newest first.
   above its follower threshold; per-post metrics exist only for posts published
   *through Signal*, not posts made directly on Facebook) instead of showing a
   bare "up to date".
+- **The Analytics empty state now diagnoses itself** from the brand's
+  connections: "No account connected" (connect CTA), "Waiting for the first
+  sync" (never synced), or "Connected, but no data returned yet" (synced N ago
+  but Facebook returned nothing — with the follower-threshold / posted-outside-
+  Signal explanation). Each connection shows its own last-sync time, and every
+  path links to "Run sync now" — so the *why* appears where the problem is first
+  noticed, not only on the Connections page.
 
 ### Fixed — Sync captures data even when one Meta metric is deprecated
 
