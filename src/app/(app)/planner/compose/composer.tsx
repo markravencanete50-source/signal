@@ -10,6 +10,7 @@ import { WarningIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import type { Platform } from "@/types";
 
+import { AiSuggestionPanel } from "./ai-suggestion-panel";
 import { submitPost, updatePublishedCaption, type ComposeState } from "./actions";
 
 /**
@@ -29,7 +30,7 @@ interface MediaOption {
 
 const CAPTION_LIMIT: Record<Platform, number> = { ig: 2200, fb: 63206 };
 
-type VariantTab = "shared" | "fb" | "ig";
+type VariantTab = "shared" | "fb" | "ig" | "ai";
 
 export interface BestTimeSlot {
   weekday: number;
@@ -353,6 +354,7 @@ export function Composer({
                 ["shared", "Shared caption"],
                 ["fb", "FB variant"],
                 ["ig", "IG variant"],
+                ["ai", "✦ AI suggestion"],
               ] as [VariantTab, string][]
             ).map(([key, label]) => (
               <button
@@ -368,25 +370,46 @@ export function Composer({
             ))}
           </div>
 
-          <textarea
-            value={active}
-            onChange={(e) => setActive(e.target.value)}
-            readOnly={isMidFlight}
-            placeholder={
-              tab === "shared"
-                ? "Write your caption. Leave the FB/IG variants blank to use this everywhere."
-                : `Override the ${tab === "fb" ? "Facebook" : "Instagram"} caption`
-            }
-            className="border-border bg-surface min-h-[110px] w-full resize-y rounded-xl border p-[13px] text-[0.9rem] leading-relaxed outline-none"
-          />
-          <div
-            className={cn("mt-1.5 text-right text-[0.72rem]", over ? "text-danger" : "text-text-2")}
-          >
-            {active.length.toLocaleString()} / {limit.toLocaleString()}
-          </div>
+          {tab === "ai" ? (
+            <AiSuggestionPanel
+              brandId={brandId}
+              platform={platforms.has("ig") ? "ig" : "fb"}
+              onUse={(text) => {
+                setShared(text);
+                setTab("shared");
+              }}
+            />
+          ) : (
+            <>
+              <textarea
+                value={active}
+                onChange={(e) => setActive(e.target.value)}
+                readOnly={isMidFlight}
+                placeholder={
+                  tab === "shared"
+                    ? "Write your caption. Leave the FB/IG variants blank to use this everywhere."
+                    : `Override the ${tab === "fb" ? "Facebook" : "Instagram"} caption`
+                }
+                className="border-border bg-surface min-h-[110px] w-full resize-y rounded-xl border p-[13px] text-[0.9rem] leading-relaxed outline-none"
+              />
+              <div
+                className={cn(
+                  "mt-1.5 text-right text-[0.72rem]",
+                  over ? "text-danger" : "text-text-2",
+                )}
+              >
+                {active.length.toLocaleString()} / {limit.toLocaleString()}
+              </div>
+            </>
+          )}
 
           {/* hashtag suggestions */}
-          <div className={cn("mt-2 flex flex-wrap items-center gap-1.5", locked && "hidden")}>
+          <div
+            className={cn(
+              "mt-2 flex flex-wrap items-center gap-1.5",
+              (locked || tab === "ai") && "hidden",
+            )}
+          >
             <button
               onClick={suggestHashtags}
               className="bg-accent-soft text-accent rounded-lg px-2.5 py-1 text-[0.74rem] font-semibold"

@@ -4,6 +4,22 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Added — Planner AI suggestion tab (content ideas + paraphrase)
+
+- **A fourth Composer variant tab, "✦ AI suggestion"**, alongside Shared caption /
+  FB variant / IG variant. The writer types what they want to post and gets **at
+  least 3 distinct caption options at once** — each with the angle it's going for
+  ("no bare suggestion") — plus a **Paraphrase** tool that rewrites a pasted line
+  into 3+ variants, each with a note on what changed. "Use this" drops the chosen
+  text into the shared caption.
+- New `lib/ai/content-suggest.ts` (`suggestPlannerContent`, `paraphraseContent`)
+  over the existing `generateStructured` choke point, tuned to the active
+  platform (IG/FB) and the brand's voice/pillars. Two writers-only, Zod-validated
+  routes — `/api/ai/content-suggest` and `/api/ai/paraphrase` — that degrade with
+  a 503 when no AI key is set, matching the rest of the AI surface.
+- `ai-suggestion-panel.tsx` carries its own loading (skeleton), empty and error
+  (retry) states.
+
 ### Added — Verify-after-publish (catches the silent-vanish failure)
 
 - **The publish half no mainstream tool does** (from `docs/competitor-research-2026-07.md`,
