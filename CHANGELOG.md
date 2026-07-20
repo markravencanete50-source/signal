@@ -4,6 +4,26 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Added — "Load demo data" (Settings → Connections, mock mode)
+
+- **One-click demo tenant** (`lib/demo-seed.ts`, `settings/connections/demo-data.tsx`,
+  `loadDemoData` action). Admin-only and mock-mode-only, it stands up a coherent
+  end-to-end dataset for the active brand so every screen is testable before a
+  real Meta account is connected: mock FB + IG connections, a fortnight of
+  published/scheduled/draft/pending-approval posts across the brand's pillars, a
+  media library, an inbox (with Leads), tracked competitors, an evergreen
+  autolist, a SmartLink with click attribution, a reach anomaly, and a monthly
+  report.
+- **Runs the real capture, not a fixture**: metricsDaily, postMetrics (+ intent)
+  and synced comments are produced by invoking the actual `syncBrandNow` against
+  the mock adapter, so the demo exercises the same path production does rather
+  than a parallel set of hand-written numbers that could drift.
+- **Idempotent**: every seeded doc has a deterministic `demo_{brandId}_…` id, so
+  re-running overwrites in place — the same discipline the sync/publish engines
+  use. Refuses to run when `USE_MOCK_ADAPTERS=false` so it can never write
+  fabricated metrics into a live-Graph tenant (DECISIONS #031). Shares the sync
+  rate-limit bucket.
+
 ### Security — audit hardening: rate limiting, headers, tenant pinning
 
 - **Rate limiting everywhere it matters** (new `lib/rate-limit.ts`, fixed-window

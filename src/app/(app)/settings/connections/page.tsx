@@ -6,6 +6,7 @@ import { getAppContext } from "@/lib/workspace-context";
 import { PLATFORM_LABEL, type PublicConnection } from "@/types";
 
 import { ConnectButton, DisconnectButton } from "./connection-buttons";
+import { DemoDataButton } from "./demo-data";
 import { SyncNowButton } from "./sync-now";
 
 export const metadata = { title: "Connections — Signal" };
@@ -74,6 +75,8 @@ export default async function ConnectionsPage({
           </span>
         </div>
       )}
+
+      {isMockMode() && canManage && <DemoDataButton brandId={activeBrand.id} />}
 
       <h3 className="mb-3 text-[0.95rem] font-semibold">Connected accounts</h3>
 

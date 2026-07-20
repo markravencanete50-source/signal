@@ -543,3 +543,27 @@ call sites. Limits are per-IP (Vercel writes the first `x-forwarded-for` hop)
 so the brake binds before any Firestore/LLM work runs. The `sync` bucket
 exists because Meta Graph quota is per-app and shared across tenants — one
 spamming admin must not starve everyone's sync.
+
+## 031 — Demo data is a seeder gated to mock mode, not a fixtures file or a live-tenant tool
+
+"Load demo data" (Settings → Connections) exists so the whole product is
+demoable and every screen is testable before Meta App Review clears. Three
+choices define it:
+
+- **It runs the real capture, not a parallel fixture.** metricsDaily,
+  postMetrics (+ intent) and inbox comments are produced by invoking the actual
+  `syncBrandNow` against the mock adapter — the same code path production uses —
+  after seeding the connections and published posts it needs. A separate
+  hand-written metrics fixture would drift from the sync engine the moment either
+  changed; this can't, because it *is* the sync engine.
+- **It is gated to mock mode.** The action refuses when `USE_MOCK_ADAPTERS=false`.
+  Writing fabricated reach/intent numbers into a tenant whose Analytics is backed
+  by the live Graph API would be worse than any empty state — it would make the
+  product lie. The empty states are deliberately good (DECISIONS on connection
+  sync status); a demo seeder must never undermine them in production.
+- **It is idempotent by deterministic id.** Every seeded doc keys on
+  `demo_{brandId}_…`, so pressing the button twice overwrites in place rather than
+  accumulating duplicates — the same rule every engine follows. The metrics/inbox
+  it delegates to already dedupe this way; the feature docs it writes directly
+  (posts, media, competitors, autolists, report) adopt it too. It shares the
+  `sync` rate-limit bucket because it runs a sync as one of its steps.

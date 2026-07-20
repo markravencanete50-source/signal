@@ -6,9 +6,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getAdapter } from "@/adapters/registry";
-import { requireBrandAccess } from "@/lib/auth/dal";
+import { getCurrentUser, requireBrandAccess } from "@/lib/auth/dal";
 import { createOAuthState } from "@/lib/auth/oauth-state";
 import { deleteConnection, getConnection } from "@/lib/db/connections";
+import { seedDemoData, type DemoSeedResult } from "@/lib/demo-seed";
+import { isMockMode } from "@/lib/env";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { syncBrandNow, type ManualSyncResult } from "@/lib/sync-engine";
 import { ADMIN_ROLES } from "@/types";
@@ -109,4 +111,84 @@ export async function runSyncNow(brandId: string): Promise<SyncNowResult> {
     const error = err instanceof Error ? err.message : "Sync failed to run.";
     return { ok: false, at, connections: [], error };
   }
+}
+
+/**
+ * Load a full demo dataset for this brand — the in-app "try every feature
+ * without connecting Meta" button.
+ *
+ * Admin-only and scoped to the brand (`seedDemoData` derives the workspace from
+ * the brand, never touching another tenant). Refuses outside mock mode so it can
+ * never write fabricated metrics into a live-Graph tenant. Revalidates every
+ * screen it populates so the seeded data shows on the next view.
+ */
+export async function loadDemoData(brandId: string): Promise<DemoSeedResult> {
+  const { session } = await requireBrandAccess(brandId, ADMIN_ROLES);
+
+  const at = new Date().toISOString();
+  const emptyCounts = {
+    connections: 0,
+    media: 0,
+    posts: 0,
+    inbox: 0,
+    metricsDaily: 0,
+    postMetrics: 0,
+    competitors: 0,
+    autolists: 0,
+    smartlinkLinks: 0,
+    anomalies: 0,
+    reports: 0,
+  };
+
+  if (!isMockMode()) {
+    return {
+      ok: false,
+      at,
+      error:
+        "Demo data can only be loaded in mock mode (USE_MOCK_ADAPTERS=true). Turn it off once real accounts are connected.",
+      sync: [],
+      counts: emptyCounts,
+    };
+  }
+
+  // Seeding is heavier than a sync (it runs a sync as one of its steps), so it
+  // shares the sync rate-limit bucket to keep the Meta quota safe.
+  const limit = checkRateLimit(await headers(), "sync");
+  if (!limit.ok) {
+    return {
+      ok: false,
+      at,
+      error: `Just ran. Try again in ${limit.retryAfterSec}s.`,
+      sync: [],
+      counts: emptyCounts,
+    };
+  }
+
+  const user = await getCurrentUser();
+  const result = await seedDemoData({
+    brandId,
+    userId: session.uid,
+    userName: user?.name ?? "An admin",
+  });
+
+  if (result.ok) {
+    for (const path of [
+      "/dashboard",
+      "/analytics",
+      "/pulse",
+      "/inbox",
+      "/planner",
+      "/approvals",
+      "/competitors",
+      "/autolists",
+      "/smartlink",
+      "/reports",
+      "/media",
+      "/settings/connections",
+    ]) {
+      revalidatePath(path);
+    }
+  }
+
+  return result;
 }
