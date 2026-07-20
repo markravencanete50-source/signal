@@ -5,6 +5,7 @@ import { generateSuggestions } from "@/lib/ai/suggest";
 import { requireBrandAccess } from "@/lib/auth/dal";
 import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { WRITER_ROLES } from "@/types";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/suggest — 3 scored, grounded next-post suggestions for Studio.
@@ -19,6 +20,9 @@ const bodySchema = z.object({ brandId: z.string().min(1) });
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
   }

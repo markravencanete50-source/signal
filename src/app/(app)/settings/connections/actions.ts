@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { getAdapter } from "@/adapters/registry";
 import { requireBrandAccess } from "@/lib/auth/dal";
 import { createOAuthState } from "@/lib/auth/oauth-state";
 import { deleteConnection, getConnection } from "@/lib/db/connections";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { syncBrandNow, type ManualSyncResult } from "@/lib/sync-engine";
 import { ADMIN_ROLES } from "@/types";
 
@@ -85,6 +87,18 @@ export async function runSyncNow(brandId: string): Promise<SyncNowResult> {
   await requireBrandAccess(brandId, ADMIN_ROLES);
 
   const at = new Date().toISOString();
+
+  // Meta Graph quota is per-APP, shared by every tenant — a spamming admin
+  // could starve everyone else's sync. Admin-only isn't enough of a brake.
+  const limit = checkRateLimit(await headers(), "sync");
+  if (!limit.ok) {
+    return {
+      ok: false,
+      at,
+      connections: [],
+      error: `Sync just ran. Try again in ${limit.retryAfterSec}s.`,
+    };
+  }
   try {
     const connections = await syncBrandNow(brandId);
     revalidatePath("/settings/connections");

@@ -4,6 +4,35 @@ All notable changes to Signal. Conventional commits; newest first.
 
 ## [Unreleased]
 
+### Security — audit hardening: rate limiting, headers, tenant pinning
+
+- **Rate limiting everywhere it matters** (new `lib/rate-limit.ts`, fixed-window
+  per client IP, unit-tested; DECISIONS #030 records the per-instance caveat and
+  the drop-in Redis upgrade path). Applied to: all 8 `/api/ai/*` routes (LLM
+  quota burn), `/api/auth/session` (token stuffing), `/api/click` (public —
+  metric flooding), `/api/search`, `/api/media/sign` + `register` (Cloudinary
+  quota), the public approval action, and "Run sync now" (Meta Graph quota is
+  per-app and shared across tenants). Blocked callers get 429 + `Retry-After`.
+- **Security headers on every response** (`next.config.ts`): HSTS, nosniff,
+  `X-Frame-Options: DENY` + `frame-ancestors 'none'` (nothing in Signal is meant
+  to be iframed), `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy` (camera/mic/geolocation off), and `poweredByHeader` off.
+- **Cross-tenant media reference closed** (`/api/media/register`): the route
+  trusted the browser's `cloudinaryPublicId`/`secureUrl`, letting a member
+  register a doc pointing at another workspace's Cloudinary asset or an external
+  URL. Both are now pinned — public id must live in `signal/{workspaceId}/`,
+  URL host must be Cloudinary's delivery domain.
+- **Session-exchange errors no longer echo Admin SDK internals** (audience/
+  issuer/config details) to the caller; a generic 401 ships, the detail goes to
+  the server log.
+- **Meta webhook verify-token compare is constant-time** (`safeEqual`), matching
+  the cron-header and HMAC discipline elsewhere.
+- Audit notes (already solid, verified): DAL-first authorisation with
+  workspace-derived-from-brand lookups; deny-all Firestore rules on every
+  token-bearing collection; AES-256-GCM token storage; HMAC-verified Meta/Stripe
+  webhooks; signed + browser-bound OAuth state; open-redirect-safe login `next`
+  param and click redirect.
+
 ### Fixed — Mobile overflow pass (composer tabs, card grids)
 
 - **Composer variant tabs**: with the new fourth "✦ AI suggestion" tab, the four

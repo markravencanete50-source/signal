@@ -8,6 +8,7 @@ import { getInboxItem } from "@/lib/db/inbox";
 import { getRecentCaptions } from "@/lib/db/posts";
 import { suggestReply } from "@/lib/ai/reply";
 import { WRITER_ROLES } from "@/types";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/reply — a drafted reply to an inbox item.
@@ -20,6 +21,9 @@ import { WRITER_ROLES } from "@/types";
 const bodySchema = z.object({ itemId: z.string().min(1) });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
   }

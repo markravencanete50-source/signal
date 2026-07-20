@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AskUnavailable, askSignalStream } from "@/lib/ai/ask";
 import { requireBrandAccess } from "@/lib/auth/dal";
 import { isAiConfigured } from "@/lib/llm";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/ask — streaming grounded answer for the Ask Signal chat.
@@ -21,6 +22,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     return textResponse(
       "Ask Signal isn't set up yet — add an Anthropic API key to enable it.",

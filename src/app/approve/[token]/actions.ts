@@ -1,10 +1,12 @@
 "use server";
 
+import { headers } from "next/headers";
 import { z } from "zod";
 
 import { findPostByApprovalToken, recordDecision } from "@/lib/db/approvals";
 import { getBrand } from "@/lib/db/brands";
 import { notifyWorkspaceAdmins } from "@/lib/db/notifications";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Record a client's approval decision — public, no login.
@@ -27,6 +29,12 @@ export async function submitDecision(
   _prev: DecisionState,
   formData: FormData,
 ): Promise<DecisionState> {
+  // Public, unauthenticated action — brake floods before any Firestore work.
+  // (The 256-bit token makes guessing hopeless anyway; this keeps it cheap too.)
+  if (!checkRateLimit(await headers(), "approve").ok) {
+    return { error: "Too many attempts. Please wait a minute and try again." };
+  }
+
   const parsed = schema.safeParse({
     token: formData.get("token"),
     decision: formData.get("decision"),

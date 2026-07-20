@@ -6,6 +6,7 @@ import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { generateCompetitorInsight } from "@/lib/ai/competitor-insight";
 import { buildCompetitorRows } from "@/lib/competitors/rows";
 import { WRITER_ROLES } from "@/types";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/competitor-insight — the grounded comparison line under the
@@ -16,6 +17,9 @@ import { WRITER_ROLES } from "@/types";
 const bodySchema = z.object({ brandId: z.string().min(1) });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
   }

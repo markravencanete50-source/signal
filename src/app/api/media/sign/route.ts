@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireMember } from "@/lib/auth/dal";
 import { signUpload } from "@/lib/cloudinary";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { getAppContext } from "@/lib/workspace-context";
 
 /**
@@ -12,7 +13,10 @@ import { getAppContext } from "@/lib/workspace-context";
  * workspace here — never taken from the request — so a caller can't sign an
  * upload into someone else's folder.
  */
-export async function POST() {
+export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "media");
+  if (limited) return limited;
+
   try {
     const { workspace } = await getAppContext();
     await requireMember(workspace.id);

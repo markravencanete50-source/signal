@@ -524,3 +524,22 @@ outside the range; the browser does all bucketing/formatting. Components gate
 on hydration via `useHydrated()` (`useSyncExternalStore`-based — no
 setState-in-effect, satisfying the strict react-hooks rule) so SSR and client
 never paint disagreeing dates.
+
+## 030 — Rate limiting is in-process fixed-window, per warm instance, not a distributed store
+
+Every abusable surface (AI generation, session exchange, public click redirect,
+search, media signing, the public approval action, manual sync) now runs behind
+`lib/rate-limit.ts`. The counters live in serverless function memory, which
+means they are per **warm instance**, not global — a determined distributed
+attacker can exceed the nominal budget by spreading across cold starts.
+
+Chosen anyway because: (a) the attacks that actually threaten a Hobby-plan
+deployment — scripted bursts, LLM-quota burn, click-flooding — ride a single
+warm lambda, which this stops; (b) a distributed limiter (Upstash Redis etc.)
+adds a paid dependency and per-request latency the current scale doesn't
+justify; and (c) the upgrade is a drop-in: `defaultLimiter` is behind the
+`consume()` interface, so swapping the Map for Redis touches one file and no
+call sites. Limits are per-IP (Vercel writes the first `x-forwarded-for` hop)
+so the brake binds before any Firestore/LLM work runs. The `sync` bucket
+exists because Meta Graph quota is per-app and shared across tenants — one
+spamming admin must not starve everyone's sync.

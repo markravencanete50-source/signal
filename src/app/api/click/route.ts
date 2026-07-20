@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { recordClick } from "@/lib/db/smartlinks";
 import { env } from "@/lib/env";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * GET /api/click?s={smartlinkId}&l={linkId}&ref={postId} — SmartLink click
@@ -23,6 +24,9 @@ const schema = z.object({
 });
 
 export async function GET(request: Request) {
+  const limited = enforceRateLimit(request, "click");
+  if (limited) return limited;
+
   const url = new URL(request.url);
   const parsed = schema.safeParse({
     s: url.searchParams.get("s"),

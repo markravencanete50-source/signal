@@ -6,6 +6,7 @@ import { requireBrandAccess } from "@/lib/auth/dal";
 import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { getBrand } from "@/lib/db/brands";
 import { WRITER_ROLES } from "@/types";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/content-suggest — the Planner AI suggestion tab.
@@ -25,6 +26,9 @@ const bodySchema = z.object({
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     // 503, not 500: the feature is unconfigured, not broken. The Composer reads
     // this and shows a "not configured" message instead of the suggestions.

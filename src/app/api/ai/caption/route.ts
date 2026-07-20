@@ -6,6 +6,7 @@ import { requireBrandAccess } from "@/lib/auth/dal";
 import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { getBrand } from "@/lib/db/brands";
 import { WRITER_ROLES } from "@/types";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/caption — caption + hashtag suggestions for the Composer.
@@ -22,6 +23,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     // 503, not 500: the feature is unconfigured, not broken. The Composer reads
     // this and simply hides the suggestion chips.

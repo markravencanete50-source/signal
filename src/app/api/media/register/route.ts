@@ -7,6 +7,7 @@ import { reExportCropped, videoFrameUrl } from "@/lib/cloudinary";
 import { createAsset } from "@/lib/db/media";
 import { getAppContext } from "@/lib/workspace-context";
 import type { MediaAsset } from "@/types/media";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/media/register — persist an asset after a direct Cloudinary upload.
@@ -30,6 +31,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "media");
+  if (limited) return limited;
+
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid upload payload." }, { status: 400 });
@@ -40,6 +44,22 @@ export async function POST(request: Request) {
     await requireMember(workspace.id);
 
     const d = parsed.data;
+
+    // The upload signature (media/sign) pins uploads to signal/{workspaceId}/,
+    // but this route used to trust whatever ids the browser posted back. That
+    // let a member register a doc pointing at ANOTHER workspace's Cloudinary
+    // asset (guessable public ids, not capabilities) or at an arbitrary
+    // external URL that would then be rendered/published as if it were theirs.
+    // Pin both to the caller's own folder / Cloudinary's delivery host.
+    if (!d.cloudinaryPublicId.startsWith(`signal/${workspace.id}/`)) {
+      return NextResponse.json(
+        { error: "Asset does not belong to this workspace." },
+        { status: 400 },
+      );
+    }
+    if (new URL(d.secureUrl).hostname !== "res.cloudinary.com") {
+      return NextResponse.json({ error: "Invalid asset URL." }, { status: 400 });
+    }
 
     // Native-format guard — videos only. Best-effort; never blocks the upload.
     let guard: MediaAsset["guard"];

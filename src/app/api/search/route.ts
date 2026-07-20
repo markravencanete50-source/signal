@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { searchWorkspace } from "@/lib/search";
 import { getAppContext } from "@/lib/workspace-context";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * GET /api/search?q= — global search across the caller's workspace.
@@ -14,6 +15,9 @@ import { getAppContext } from "@/lib/workspace-context";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const limited = enforceRateLimit(request, "search");
+  if (limited) return limited;
+
   const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (query.length < 2) {
     return NextResponse.json({ brands: [], posts: [], media: [], reports: [], total: 0 });

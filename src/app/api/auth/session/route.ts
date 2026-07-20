@@ -4,6 +4,7 @@ import { z } from "zod";
 import { upsertUser } from "@/lib/db/workspaces";
 import { adminAuth } from "@/lib/firebase-admin";
 import { createSession, destroySession } from "@/lib/auth/session";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Session exchange.
@@ -22,6 +23,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "auth");
+  if (limited) return limited;
+
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
 
   if (!parsed.success) {
@@ -47,9 +51,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not create session";
-    // 401 not 500: this is almost always an expired or forged token.
-    return NextResponse.json({ error: message }, { status: 401 });
+    // 401 not 500: this is almost always an expired or forged token. The real
+    // reason goes to the server log only — Admin SDK messages describe project
+    // configuration (audience, issuer) that an attacker probing this endpoint
+    // has no business reading.
+    console.error("[auth] session exchange failed:", err instanceof Error ? err.message : err);
+    return NextResponse.json(
+      { error: "Sign-in expired or invalid. Please try again." },
+      {
+        status: 401,
+      },
+    );
   }
 }
 

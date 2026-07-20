@@ -6,6 +6,7 @@ import { requireBrandAccess } from "@/lib/auth/dal";
 import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { getBrand } from "@/lib/db/brands";
 import { WRITER_ROLES } from "@/types";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/score — predicted intent score for a draft (Composer ring).
@@ -22,6 +23,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
   }

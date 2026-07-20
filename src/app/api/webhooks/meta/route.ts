@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeEqual } from "@/lib/crypto";
 import { verifyHubSignature } from "@/lib/meta/webhook-signature";
 
 /**
@@ -38,7 +39,9 @@ export function GET(request: NextRequest) {
   const token = params.get("hub.verify_token");
   const challenge = params.get("hub.challenge");
 
-  if (mode === "subscribe" && token === verifyToken && challenge) {
+  // safeEqual, not ===: the compare involves a server secret, and constant-time
+  // is free — same discipline as the cron header and HMAC digests.
+  if (mode === "subscribe" && token && safeEqual(token, verifyToken) && challenge) {
     // Meta requires the raw challenge echoed as text/plain — a JSON-wrapped or
     // quoted value fails verification.
     return new NextResponse(challenge, {

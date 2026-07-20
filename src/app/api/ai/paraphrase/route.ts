@@ -6,6 +6,7 @@ import { requireBrandAccess } from "@/lib/auth/dal";
 import { AiUnavailableError, isAiConfigured } from "@/lib/llm";
 import { getBrand } from "@/lib/db/brands";
 import { WRITER_ROLES } from "@/types";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/ai/paraphrase — rewrite a line into at least 3 variants.
@@ -24,6 +25,9 @@ const bodySchema = z.object({
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, "ai");
+  if (limited) return limited;
+
   if (!isAiConfigured()) {
     return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
   }
