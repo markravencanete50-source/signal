@@ -76,11 +76,11 @@ export default async function ConnectionsPage({
         </div>
       )}
 
-      {isMockMode() && canManage && <DemoDataButton brandId={activeBrand.id} />}
-
       <h3 className="mb-3 text-[0.95rem] font-semibold">Connected accounts</h3>
 
       {canManage && connections.length > 0 && <SyncNowButton brandId={activeBrand.id} />}
+
+      {canManage && <DemoDataButton brandId={activeBrand.id} />}
 
       {connections.length === 0 && (
         <p className="text-text-2 mb-3 text-[0.85rem]">

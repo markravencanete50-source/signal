@@ -544,26 +544,31 @@ so the brake binds before any Firestore/LLM work runs. The `sync` bucket
 exists because Meta Graph quota is per-app and shared across tenants — one
 spamming admin must not starve everyone's sync.
 
-## 031 — Demo data is a seeder gated to mock mode, not a fixtures file or a live-tenant tool
+## 031 — "Use mock data" is a mode-independent seeder that drives the mock adapter directly
 
-"Load demo data" (Settings → Connections) exists so the whole product is
-demoable and every screen is testable before Meta App Review clears. Three
-choices define it:
+"Use mock data" (Settings → Connections, beneath "Run sync now") exists so the
+whole product is testable — every screen filled with real-shaped data — without
+a live Meta account, on any deployment. The first cut gated it to mock mode and
+ran the real `syncBrandNow`; that was wrong for the actual use, which is a live
+Vercel build (`USE_MOCK_ADAPTERS=false`) with a real Facebook connection but no
+data to look at. The revised design:
 
-- **It runs the real capture, not a parallel fixture.** metricsDaily,
-  postMetrics (+ intent) and inbox comments are produced by invoking the actual
-  `syncBrandNow` against the mock adapter — the same code path production uses —
-  after seeding the connections and published posts it needs. A separate
-  hand-written metrics fixture would drift from the sync engine the moment either
-  changed; this can't, because it *is* the sync engine.
-- **It is gated to mock mode.** The action refuses when `USE_MOCK_ADAPTERS=false`.
-  Writing fabricated reach/intent numbers into a tenant whose Analytics is backed
-  by the live Graph API would be worse than any empty state — it would make the
-  product lie. The empty states are deliberately good (DECISIONS on connection
-  sync status); a demo seeder must never undermine them in production.
+- **Numbers come from the mock adapter directly, not the sync engine.** The
+  seeder calls `createMockAdapter(platform).fetchAccountInsights` /
+  `fetchPostInsights` and writes the results to `metricsDaily`/`postMetrics` with
+  the same intent-scoring the sync uses. So it produces identical shapes to
+  production but works with `USE_MOCK_ADAPTERS` off, spends no Graph quota, and
+  never calls Meta. Running the real `syncBrandNow` in a live build would instead
+  hit the Graph API through the real adapter — the opposite of what a demo needs.
+- **It is not gated to mock mode.** The earlier "refuse in live mode" guard
+  assumed the tenant's Analytics was precious live data; for this product (a
+  portfolio/demo deployment) the whole point is to populate it. The safety that
+  *does* matter is preserved differently: the seeder **never overwrites a real
+  connection** (mock FB/IG connections are created only when the brand has none),
+  and the metrics render off `metricsDaily`/`postMetrics` keyed by brand, so no
+  fake connection is required.
 - **It is idempotent by deterministic id.** Every seeded doc keys on
-  `demo_{brandId}_…`, so pressing the button twice overwrites in place rather than
-  accumulating duplicates — the same rule every engine follows. The metrics/inbox
-  it delegates to already dedupe this way; the feature docs it writes directly
-  (posts, media, competitors, autolists, report) adopt it too. It shares the
-  `sync` rate-limit bucket because it runs a sync as one of its steps.
+  `demo_{brandId}_…` (and the mock adapter is deterministic per entity id), so
+  pressing the button twice overwrites in place rather than accumulating
+  duplicates — the same rule every engine follows. It shares the `sync`
+  rate-limit bucket to bound how often it can run.

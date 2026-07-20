@@ -10,7 +10,6 @@ import { getCurrentUser, requireBrandAccess } from "@/lib/auth/dal";
 import { createOAuthState } from "@/lib/auth/oauth-state";
 import { deleteConnection, getConnection } from "@/lib/db/connections";
 import { seedDemoData, type DemoSeedResult } from "@/lib/demo-seed";
-import { isMockMode } from "@/lib/env";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { syncBrandNow, type ManualSyncResult } from "@/lib/sync-engine";
 import { ADMIN_ROLES } from "@/types";
@@ -118,9 +117,10 @@ export async function runSyncNow(brandId: string): Promise<SyncNowResult> {
  * without connecting Meta" button.
  *
  * Admin-only and scoped to the brand (`seedDemoData` derives the workspace from
- * the brand, never touching another tenant). Refuses outside mock mode so it can
- * never write fabricated metrics into a live-Graph tenant. Revalidates every
- * screen it populates so the seeded data shows on the next view.
+ * the brand, never touching another tenant). Works in any mode: the seeded
+ * metrics come from the mock adapter directly, so no Graph call or quota is
+ * involved. Revalidates every screen it populates so the data shows on the next
+ * view.
  */
 export async function loadDemoData(brandId: string): Promise<DemoSeedResult> {
   const { session } = await requireBrandAccess(brandId, ADMIN_ROLES);
@@ -140,26 +140,14 @@ export async function loadDemoData(brandId: string): Promise<DemoSeedResult> {
     reports: 0,
   };
 
-  if (!isMockMode()) {
-    return {
-      ok: false,
-      at,
-      error:
-        "Demo data can only be loaded in mock mode (USE_MOCK_ADAPTERS=true). Turn it off once real accounts are connected.",
-      sync: [],
-      counts: emptyCounts,
-    };
-  }
-
-  // Seeding is heavier than a sync (it runs a sync as one of its steps), so it
-  // shares the sync rate-limit bucket to keep the Meta quota safe.
+  // Seeding writes across many collections; share the sync rate-limit bucket so
+  // it can't be hammered.
   const limit = checkRateLimit(await headers(), "sync");
   if (!limit.ok) {
     return {
       ok: false,
       at,
       error: `Just ran. Try again in ${limit.retryAfterSec}s.`,
-      sync: [],
       counts: emptyCounts,
     };
   }
