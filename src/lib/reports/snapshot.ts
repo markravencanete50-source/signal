@@ -95,7 +95,10 @@ export async function buildBrandSnapshot(
         platform: p.platform === "ig" ? "Instagram" : "Facebook",
         intentScore: p.intentScore,
         reach: p.reach,
-        saves: p.saves,
+        // Omit `saves` entirely when the platform doesn't report it (Facebook):
+        // Firestore rejects a nested `undefined`, so writing the report doc would
+        // throw. The field is optional, so an absent key is the correct shape.
+        ...(p.saves !== undefined ? { saves: p.saves } : {}),
         shares: p.shares,
       })),
     smartlinkClicks: attribution
